@@ -16,8 +16,12 @@ class RunCmdError(Exception):
 def _put_serial(serial):
     if serial is None:
         return ''
-    else:
+    elif type(serial) == int:
+        return ' -s emulator-{} '.format(serial)
+    elif type(serial) == str:
         return ' -s "{}" '.format(serial)
+    else:
+        raise ValueError("Serial must be integer or string: {}".format(serial))
 
 def run_adb_cmd(orig_cmd, serial=None, timeout=None):
     # timeout should be string, for example '2s'
@@ -47,9 +51,11 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None):
 
     return res
 
-def run_cmd(cmd, cwd=None, env=None):
+def run_cmd(cmd, **kwargs):
+    # Examples for kwargs
+    #  - cwd=something, env=something, pass_fds=something
     pipe = subprocess.Popen(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, cwd=cwd, env=env)
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, **kwargs)
     out, err = pipe.communicate()
     if isinstance(out, bytes):
         out = out.decode('utf-8')
@@ -99,3 +105,32 @@ class CacheDecorator:
                 del self.recent_values[-1]
 
             return value
+
+def get_package_name(apk_path):
+    res = run_cmd("{} dump badging {} | grep package | awk '{print $2}' | sed s/name=//g | sed s/\\'//g".format(
+        getConfig()['AAPT_PATH'], apk_path
+    ))
+    return res
+
+def save_snapshot(name, serial = None):
+    return run_adb_cmd("emu avd snapshot save \"{}\"".format(name), serial=serial)
+
+def load_snapshot(name, serial = None):
+    return run_adb_cmd("emu avd snapshot load \"{}\"".format(name), serial=serial)
+
+def list_snapshots(serial = None):
+    res = run_adb_cmd("emu avd snapshot list", serial=serial)
+
+    if res.startswith("There is no snapshot available"):
+        return []
+    else:
+        lines = res.split("\n")
+        ret = []
+        for line in lines[2:]:
+            if line.startswith("OK"):
+                break
+            tokens = line.split()
+            name = ' '.join(tokens[1:-4])
+            ret.append(name)
+
+        return ret
