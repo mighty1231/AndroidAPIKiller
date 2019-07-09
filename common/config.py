@@ -29,4 +29,5 @@ def getConfig():
 
         _config['EMMA_JAR_PATH'] = os.path.join(_config['SDK_PATH'], 'tools/lib/emma.jar')
         _config['ADB_PATH'] = os.path.join(_config['SDK_PATH'], 'platform-tools/adb')
+        _config['AVDMANAGER_PATH'] = os.path.join(_config['SDK_PATH'], 'tools/bin/avdmanager')
     return _config

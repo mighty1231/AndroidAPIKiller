@@ -3,6 +3,7 @@ from config import getConfig
 import os, subprocess
 import sys
 import time
+import re
 
 def kill_emulator(serial = None):
     try:
@@ -12,8 +13,33 @@ def kill_emulator(serial = None):
         print('RunCmdError: out', e.out)
         print('RunCmdError: err', e.err)
 
-def emulator_run_and_wait(avd_name, serial, snapshot=None, wipe_data=False, writable_system=False):
+def _check_port_is_available(port):
+    try:
+        run_cmd('lsof -i :{}'.format(port))
+        return False
+    except RunCmdError as e:
+        return True
+
+def emulator_run_and_wait(avd_name, serial=None, snapshot=None, wipe_data=False, writable_system=False):
     r_fd, w_fd = os.pipe()
+
+    if serial is None:
+        # Pairs for port would be one of
+        #   (5554,5555) (5556,5557) ... (5584,5585)
+        serial = 5554
+        while True:
+            if _check_port_is_available(serial):
+                break
+            else:
+                serial += 2
+
+                if serial > 5584:
+                    raise RuntimeError
+        assert _check_port_is_available(serial+1) == True
+    elif type(serial) == str:
+        serial = re.match(r'emulator-(\w+)', serial).groups()[0]
+    else:
+        assert type(serial) == int
 
     # parent process
     emulator_cmd = ['./emulator',
@@ -22,6 +48,8 @@ def emulator_run_and_wait(avd_name, serial, snapshot=None, wipe_data=False, writ
         '-ports', '{},{}'.format(serial, serial+1),
         '-avd', avd_name
     ]
+    if snapshot is not None and wipe_data:
+        print("RunEmulator: Warning, wipe_data would remove all of snapshot data")
     if snapshot is not None:
         # This option would not raise any exception,
         #   even if there is no snapshot with specified name.
@@ -30,9 +58,12 @@ def emulator_run_and_wait(avd_name, serial, snapshot=None, wipe_data=False, writ
         emulator_cmd.append(snapshot)
 
     if wipe_data:
+        # It would wipe all data on device, even snapshots.
         emulator_cmd.append('-wipe-data')
 
     if writable_system:
+        # This option is used when modification on /system is needed.
+        # It could be used for modifying /system/lib/libart.so, as MiniTracing does
         emulator_cmd.append('-writable-system')
 
     proc = subprocess.Popen(' '.join(emulator_cmd), stdout=w_fd, stderr=w_fd, shell=True,
@@ -68,9 +99,11 @@ def emulator_run_and_wait(avd_name, serial, snapshot=None, wipe_data=False, writ
     run_adb_cmd("root", serial=serial)
 
     if writable_system:
-        run_adb_cmd("remount")
-        run_adb_cmd("shell su root mount -o remount,rw /system")
+        run_adb_cmd("remount", serial=serial)
+        run_adb_cmd("shell su root mount -o remount,rw /system", serial=serial)
     os.close(r_fd)
+
+    return serial
 
 def emulator_setup(serial = None):
     ''' File setup borrowed from Stoat '''
