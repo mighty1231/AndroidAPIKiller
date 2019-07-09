@@ -1,9 +1,20 @@
-from utils import run_adb_cmd, RunCmdError, list_snapshots
+from utils import run_cmd, run_adb_cmd, RunCmdError, list_snapshots
 from config import getConfig
 import os, subprocess
 import sys
 import time
 import re
+
+def print_status():
+    res = run_adb_cmd('devices')
+
+    assert res.count('\n') >= 2, res
+
+    for line in res.split('\n')[1:]:
+        if line == '':
+            continue
+        print(line.split())
+    print('res', repr(res))
 
 def kill_emulator(serial = None):
     try:
@@ -36,6 +47,7 @@ def emulator_run_and_wait(avd_name, serial=None, snapshot=None, wipe_data=False,
                 if serial > 5584:
                     raise RuntimeError
         assert _check_port_is_available(serial+1) == True
+        print('RunEmulator: Port set to {}, {}'.format(serial, serial+1))
     elif type(serial) == str:
         serial = re.match(r'emulator-(\w+)', serial).groups()[0]
     else:
@@ -49,7 +61,7 @@ def emulator_run_and_wait(avd_name, serial=None, snapshot=None, wipe_data=False,
         '-avd', avd_name
     ]
     if snapshot is not None and wipe_data:
-        print("RunEmulator: Warning, wipe_data would remove all of snapshot data")
+        print("RunEmulator: Warning, wipe_data would remove all of snapshots")
     if snapshot is not None:
         # This option would not raise any exception,
         #   even if there is no snapshot with specified name.
@@ -102,6 +114,7 @@ def emulator_run_and_wait(avd_name, serial=None, snapshot=None, wipe_data=False,
         run_adb_cmd("remount", serial=serial)
         run_adb_cmd("shell su root mount -o remount,rw /system", serial=serial)
     os.close(r_fd)
+    # proc.communicate()
 
     return serial
 
@@ -148,4 +161,40 @@ def emulator_setup(serial = None):
         print(res)
 
 if __name__ == "__main__":
-    emulator_run_and_wait('N5X22_511r3', 5554)
+    '''
+    Run emulator
+    python emulator.py status
+    python emulator.py run DEVICE_NAME [SERIAL]
+    '''
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Manages android emulator')
+
+
+    subparsers = parser.add_subparsers(dest='func')
+
+    list_parser = subparsers.add_parser('list')
+
+    run_parser = subparsers.add_parser('run')
+    run_parser.add_argument('device_name', action='store', type=str)
+    run_parser.add_argument('--port', action='store', default=None)
+    run_parser.add_argument('--snapshot', action='store', default=None)
+    run_parser.add_argument('--wipe_data', action='store_true')
+    run_parser.add_argument('--writable_system', action='store_true')
+
+    args = parser.parse_args()
+    if args.func == 'list':
+        pass
+    elif args.func == 'run':
+        try:
+            port = int(args.port)
+        except (TypeError, ValueError):
+            port = args.port
+        emulator_run_and_wait(args.device_name,
+            snapshot=args.snapshot,
+            serial=port,
+            wipe_data=args.wipe_data,
+            writable_system=args.writable_system
+        )
+    else:
+        raise
