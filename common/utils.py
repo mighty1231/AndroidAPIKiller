@@ -107,10 +107,10 @@ class CacheDecorator:
             return value
 
 def get_package_name(apk_path):
-    res = run_cmd("{} dump badging {} | grep package | awk '{print $2}' | sed s/name=//g | sed s/\\'//g".format(
+    res = run_cmd("{} dump badging {} | grep package | awk '{{print $2}}' | sed s/name=//g | sed s/\\'//g".format(
         getConfig()['AAPT_PATH'], apk_path
     ))
-    return res
+    return res.strip()
 
 def save_snapshot(name, serial = None):
     return run_adb_cmd("emu avd snapshot save \"{}\"".format(name), serial=serial)

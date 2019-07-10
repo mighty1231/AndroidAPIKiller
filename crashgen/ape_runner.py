@@ -1,5 +1,6 @@
 import sys, os
 sys.path.insert(0, '../common')
+
 from utils import (
     run_adb_cmd,
     RunCmdError,
@@ -8,35 +9,53 @@ from utils import (
     save_snapshot,
     load_snapshot
 )
+from emulator import get_avd_list, kill_emulator, emulator_run_and_wait, emulator_setup
+import time
 
-def install_ape_and_make_snapshot():
-    APE_ROOT = '/data/local/tmp/'
-    run_adb_cmd('push ape.jar {}'.format(APE_ROOT))
-    save_snapshot('APE_INSTALLED')
+APE_READY_SS = 'APE_READY' # snapshot name
+APE_ROOT = '/data/local/tmp/'
 
-def run_ape(apk_path, running_minutes=20):
+def install_ape_and_make_snapshot(avd_name, force_snapshot=False):
+    avd_list = get_avd_list()
+    avd = next(avd for avd in avd_list if avd.name == avd_name)
+
+    if avd.running:
+        if not force_snapshot and APE_READY_SS in list_snapshots(serial = avd.serial):
+            load_snapshot(APE_READY_SS, serial=avd.serial)
+            return avd
+        kill_emulator(serial = avd.serial)
+        time.sleep(10)
+
+    serial = emulator_run_and_wait(avd_name, wipe_data=True)
+    print('Setup emulator...')
+    emulator_setup(serial=serial)
+    run_adb_cmd('push ape.jar {}'.format(APE_ROOT), serial=serial)
+    save_snapshot(APE_READY_SS, serial=serial)
+    avd.setRunning(serial)
+    return avd
+
+def run_ape(apk_path, avd_name, running_minutes=20):
     package_name = get_package_name(apk_path)
+    print('Installing APE...')
 
-    # install ape.jar
-    if 'APE_INSTALLED' not in list_snapshots():
-        raise RuntimeError('APE must be installed as default environment')
-    load_snapshot('APE_INSTALLED')
-
-    # install apk
-    run_adb_cmd('install {}'.format(apk_path))
+    avd = install_ape_and_make_snapshot(avd_name)
+    run_adb_cmd('install {}'.format(apk_path), serial=avd.serial)
 
     # run ape
-    args = '-p {} --running-minutes {} -vvv --ape sata --bugreport'.format(package_name, running_minutes)
+    print('Running APE...')
+    args = '-p {} --running-minutes {} --ape sata --bugreport'.format(package_name, running_minutes)
     ret = run_adb_cmd('shell CLASSPATH={} {} {} {} {}'.format(
         os.path.join(APE_ROOT, 'ape.jar'),
         '/system/bin/app_process',
         APE_ROOT,
         'com.android.commands.monkey.Monkey',
         args
-    ))
+    ), serial=avd.serial)
 
     print(ret)
 
 if __name__ == "__main__":
     apk_path = sys.argv[1]
-    run_ape(apk_path)
+    avd_name = sys.argv[2]
+
+    run_ape(apk_path, avd_name)

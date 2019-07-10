@@ -1,4 +1,4 @@
-from utils import run_cmd, run_adb_cmd, RunCmdError, list_snapshots
+from utils import run_cmd, run_adb_cmd, RunCmdError, list_snapshots, CacheDecorator
 from config import getConfig
 import os, subprocess
 import sys
@@ -39,8 +39,10 @@ class AVD:
             ret.append('AVD<{}>.{} = {}'.format(self.name, attr, getattr(self, attr)))
         return '\n'.join(ret)
 
-def get_avd_list():
+@CacheDecorator
+def _run_avdmanager_list_avd():
     # get all available devices
+    # this function seems not be changed, so use cache
     avdmanager = getConfig()['AVDMANAGER_PATH']
     output = run_cmd('{} list avd'.format(avdmanager))
 
@@ -59,9 +61,9 @@ def get_avd_list():
             base, tag = re.match(r'Based on: (.*) Tag/ABI: (.*)', lines[i+4].lstrip()).groups()
             skin   = re.match(r'Skin: (.*)', lines[i+5].lstrip()).groups()[0]
             sdcard = re.match(r'Sdcard: (.*)', lines[i+6].lstrip()).groups()[0]
-            avd = AVD(name, device, path, target, base, tag, skin, sdcard)
+            avd = (name, device, path, target, base, tag, skin, sdcard)
 
-            if avd.tag.startswith('google_apis_playstore'):
+            if tag.startswith('google_apis_playstore'):
                 print('Warning: AVD[{}] cannot be rooted'.format(name), file=sys.stderr)
             else:
                 avd_list.append(avd)
@@ -74,6 +76,10 @@ def get_avd_list():
         print(output, file=sys.stderr)
         print('//---------------------------//')
         raise
+    return avd_list
+
+def get_avd_list(warned = False):
+    avd_list = list(map(lambda args:AVD(*args), _run_avdmanager_list_avd()))
 
     # fetch currently running devices
     res = run_adb_cmd('devices')
@@ -119,7 +125,7 @@ def emulator_run_and_wait(avd_name, serial=None, snapshot=None, wipe_data=False,
     # check avd
     avd_list = get_avd_list()
     if any(a.running and a.name == avd_name for a in avd_list):
-        raise RuntimeError('AVD with {} is already running'.format(avd_name))
+        raise RuntimeError('AVD<{}> is already running'.format(avd_name))
 
     r_fd, w_fd = os.pipe()
 
@@ -180,10 +186,11 @@ def emulator_run_and_wait(avd_name, serial=None, snapshot=None, wipe_data=False,
         except RunCmdError as e:
             print('RunCmdError: out', e.out)
             print('RunCmdError: err', e.err)
-            if 'not found' in e.err and not_found_cnt < 2:
+            if 'not found' in e.err and not_found_cnt < 4:
                 not_found_cnt += 1
             else:
                 print('RunEmulator: Failed, check following log from emulator')
+                kill_emulator(serial=serial)
                 handle = os.fdopen(r_fd, 'r')
                 while True:
                     line = handle.readline()
@@ -209,6 +216,7 @@ def emulator_run_and_wait(avd_name, serial=None, snapshot=None, wipe_data=False,
 
 def emulator_setup(serial = None):
     ''' File setup borrowed from Stoat '''
+    folder, filename = os.path.split(__file__)
     files = [
         "./sdcard/1.vcf",
         "./sdcard/2.vcf",
@@ -246,7 +254,7 @@ def emulator_setup(serial = None):
         "./sdcard/sample_sorenson.mov.zip",
     ]
     for file in files:
-        res = run_adb_cmd("push {} /mnt/sdcard/".format(file), serial=serial)
+        res = run_adb_cmd("push {} /mnt/sdcard/".format(os.path.join(folder, file)), serial=serial)
         print(res)
 
 if __name__ == "__main__":
