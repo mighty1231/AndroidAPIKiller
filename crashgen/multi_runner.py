@@ -7,7 +7,7 @@ import time
 
 sys.path.insert(0, '../common')
 from emulator import get_avd_list
-from utils import run_adb_cmd, RunCmdError
+from utils import run_adb_cmd, RunCmdError, MultiprocessingDelayDecorator
 from ape_runner import run_ape, install_ape_and_make_snapshot
 
 def run_ape_task(avd_name, apk_queue, error_queue):
@@ -41,10 +41,10 @@ if __name__ == "__main__":
 
     avd_cnt = len(avd_names)
     time.sleep(2)
-    run_adb_cmd._mp = True # Turn on MultiprocessingDelayDecorator
     run_adb_cmd('kill-server')
     run_adb_cmd('start-server')
     time.sleep(2)
+    MultiprocessingDelayDecorator.mp = True
 
     for avd_name in avd_names:
         mp.Process(target=run_ape_task, args=(avd_name, apk_queue, error_queue)).start()

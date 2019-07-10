@@ -7,13 +7,16 @@ import multiprocessing as mp
 import datetime, time
 
 class RunCmdError(Exception):
-    def __init__(self, out, err):
+    def __init__(self, out, err, cmd=''):
         msg = "----------------------------------------------------\n"
+        if cmd:
+            msg += "Command: {}\n".format(cmd)
         msg += "Out: %s\nError: %s" % (out, err)
         super(RunCmdError, self).__init__(msg)
 
         self.out = out
         self.err = err
+        self.cmd = cmd
 
 class AdbOfflineError(Exception):
     def __init__(self, msg):
@@ -58,13 +61,14 @@ class CacheDecorator:
             return value
 
 class MultiprocessingDelayDecorator: # assume that it only used on run_adb_cmd (offline error things...)
+    mp = False
     def __init__(self, f):
         self.func = f
         self.lock = mp.Lock()
         self.last_called_time = None
 
     def __call__(self, *args, **kwargs):
-        if hasattr(self.func, '_mp'):
+        if MultiprocessingDelayDecorator.mp:
             self.lock.acquire()
             if self.last_called_time is not None and \
                     (datetime.datetime.now() - self.last_called_time).total_seconds() <= 1:
@@ -122,14 +126,16 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None, realtime=False):
                 offline_error = True
         output = '\n'.join(output)
 
-        if proc.poll() > 0:
-            if offline_error:
-                raise AdbOfflineError(output)
-            else:
-                print('run_adb_cmd(): error with command', cmd)
-                print('run_adb_cmd(): output:')
-                print(output)
-            raise RunCmdError('', output)
+        if offline_error:
+            raise AdbOfflineError(output)
+        poll = proc.poll()
+        if poll is None:
+            ret = proc.wait()
+            if ret > 0:
+                raise RunCmdError(out, err, cmd=cmd)
+
+        elif poll > 0:
+            raise RunCmdError('', output, cmd=cmd)
 
         return ''
     else:
@@ -147,8 +153,7 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None, realtime=False):
         if proc.returncode > 0:
             if 'error: device offline' in err:
                 raise AdbOfflineError(err)
-            print("Executing %s" % cmd)
-            raise RunCmdError(out, err)
+            raise RunCmdError(out, err, cmd=cmd)
 
         return res
 
@@ -165,8 +170,7 @@ def run_cmd(cmd, cwd=None, env=None):
         res = err
 
     if pipe.returncode > 0:
-        print("Executing %s" % cmd)
-        raise RunCmdError(out, err)
+        raise RunCmdError(out, err, cmd=cmd)
 
     return res
 
