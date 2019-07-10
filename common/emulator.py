@@ -5,7 +5,41 @@ import sys
 import time
 import re
 
-def print_status():
+class AVD:
+    def __init__(self, name, device, path, target, base, tag, skin, sdcard):
+        self.name = name
+        self.device = device
+        self.path = path
+        self.target = target
+        self.base = base
+        self.tag = tag
+        self.skin = skin
+        self.sdcard = sdcard
+
+        # Two cases:
+        #    running (there is serial)
+        #    not running
+        self.running = False
+        self.serial = None
+
+    def setRunning(self, serial):
+        self.running = True
+        self.serial = serial
+
+    def __repr__(self):
+        if self.running:
+            return '<AVD[{}] {}, {}, running with {}>'.format(self.name, self.device, self.tag, self.serial)
+        else:
+            return '<AVD[{}] {}, {}, available>'.format(self.name, self.device, self.tag)
+
+    def getDetail(self):
+        ret = []
+        for attr in ['device', 'path', 'target', 'base', 'tag',
+                'skin', 'sdcard', 'running', 'sdcard', 'running', 'serial']:
+            ret.append('AVD<{}>.{} = {}'.format(self.name, attr, getattr(self, attr)))
+        return '\n'.join(ret)
+
+def get_avd_list():
     # get all available devices
     avdmanager = getConfig()['AVDMANAGER_PATH']
     output = run_cmd('{} list avd'.format(avdmanager))
@@ -25,17 +59,23 @@ def print_status():
             base, tag = re.match(r'Based on: (.*) Tag/ABI: (.*)', lines[i+4].lstrip()).groups()
             skin   = re.match(r'Skin: (.*)', lines[i+5].lstrip()).groups()[0]
             sdcard = re.match(r'Sdcard: (.*)', lines[i+6].lstrip()).groups()[0]
+            avd = AVD(name, device, path, target, base, tag, skin, sdcard)
+
+            if avd.tag.startswith('google_apis_playstore'):
+                print('Warning: AVD[{}] cannot be rooted'.format(name), file=sys.stderr)
+            else:
+                avd_list.append(avd)
             i += 8
-            avd_list.append((name, device, path, target, base, tag, skin, sdcard))
+
     except Exception as e:
-        print('Unexpected form for avdmanager list avd')
-        print('Result of avdmanger list avd -->')
-        print(output)
-        print()
-        print(sys.exc_info())
+        print('Error: Unexpected form on avdmanager list avd', file=sys.stderr)
+        print('Result of avdmanger list avd -->', file=sys.stderr)
+        print('//---------------------------//')
+        print(output, file=sys.stderr)
+        print('//---------------------------//')
+        raise
 
     # fetch currently running devices
-    running_avds = dict() # (name, serial)
     res = run_adb_cmd('devices')
     assert res.count('\n') >= 2, res
     for line in res.split('\n')[1:]:
@@ -45,28 +85,20 @@ def print_status():
 
         # At now, assert all devices are based on emulator
         avd_name = run_adb_cmd('emu avd name', serial=serial).split()[0]
-        running_avds[avd_name] = serial
 
-    # make clear
-    available_devices = []
-    used_devices = []
+        # find with avd_name
+        for avd in avd_list:
+            if avd.name == avd_name:
+                avd.setRunning(serial)
+                break
+
+    return avd_list
+
+
+def print_avd_status():
+    avd_list = get_avd_list()
     for avd in avd_list:
-        avd_name = avd[0]
-        if avd_name in running_avds:
-            used_devices.append((avd, running_avds[avd_name]))
-        else:
-            available_devices.append(avd)
-
-    print('Available devices')
-    for avd in available_devices:
-        print(' {}'.format(avd))
-
-    print('Running devices')
-    for avd, serial in used_devices:
-        print(' {} - {}'.format(serial, avd))
-
-    return available_devices, used_devices
-
+        print(avd)
 
 def kill_emulator(serial = None):
     try:
@@ -239,7 +271,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     if args.func == 'status':
-        print_status()
+        print_avd_status()
     elif args.func == 'run':
         try:
             port = int(args.port)
