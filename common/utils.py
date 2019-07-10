@@ -22,6 +22,74 @@ class AdbOfflineError(Exception):
             'adb kill-server && adb start-server'
         )
 
+class CacheDecorator:
+    _size = 8
+    def __init__(self, f):
+        self.func = f
+        self.recent_keys = []
+        self.recent_values = []
+
+    def __call__(self, *args):
+        args_hashable = tuple(args)
+        if args_hashable in self.recent_keys:
+            # cache hit
+            target = self.recent_keys.index(args_hashable)
+            value = self.recent_values[target]
+
+            # update 
+            del self.recent_keys[target]
+            del self.recent_values[target]
+
+            self.recent_keys.insert(0, args_hashable)
+            self.recent_values.insert(0, value)
+
+            return value
+
+        else:
+            value = self.func(*args)
+
+            self.recent_keys.insert(0, args_hashable)
+            self.recent_values.insert(0, value)
+
+            if len(self.recent_keys) >= CacheDecorator._size:
+                del self.recent_keys[-1]
+                del self.recent_values[-1]
+
+            return value
+
+class MultiprocessingDelayDecorator: # assume that it only used on run_adb_cmd (offline error things...)
+    def __init__(self, f):
+        self.func = f
+        self.lock = mp.Lock()
+        self.last_called_time = None
+
+    def __call__(self, *args, **kwargs):
+        if hasattr(self.func, '_mp'):
+            self.lock.acquire()
+            if self.last_called_time is not None and \
+                    (datetime.datetime.now() - self.last_called_time).total_seconds() <= 1:
+                time.sleep(1)
+            try:
+                return self.func(*args, **kwargs)
+            except AdbOfflineError as e:
+                run_adb_cmd('kill-server')
+                run_adb_cmd('start-server')
+                time.sleep(1)
+
+                # try again!
+                try:
+                    return self.func(*args, **kwargs)
+                except Exception as e2:
+                    self.last_called_time = datetime.datetime.now()
+                    self.lock.release()
+                    raise e
+            except Exception as e:
+                self.last_called_time = datetime.datetime.now()
+                self.lock.release()
+                raise
+        else:
+            return self.func(*args, **kwargs)
+
 def _put_serial(serial):
     if serial is None:
         return ''
@@ -101,73 +169,6 @@ def run_cmd(cmd, cwd=None, env=None):
 
     return res
 
-class CacheDecorator:
-    _size = 8
-    def __init__(self, f):
-        self.func = f
-        self.recent_keys = []
-        self.recent_values = []
-
-    def __call__(self, *args):
-        args_hashable = tuple(args)
-        if args_hashable in self.recent_keys:
-            # cache hit
-            target = self.recent_keys.index(args_hashable)
-            value = self.recent_values[target]
-
-            # update 
-            del self.recent_keys[target]
-            del self.recent_values[target]
-
-            self.recent_keys.insert(0, args_hashable)
-            self.recent_values.insert(0, value)
-
-            return value
-
-        else:
-            value = self.func(*args)
-
-            self.recent_keys.insert(0, args_hashable)
-            self.recent_values.insert(0, value)
-
-            if len(self.recent_keys) >= CacheDecorator._size:
-                del self.recent_keys[-1]
-                del self.recent_values[-1]
-
-            return value
-
-class MultiprocessingDelayDecorator: # assume that it only used on run_adb_cmd (offline error things...)
-    def __init__(self, f):
-        self.func = f
-        self.lock = mp.Lock()
-        self.last_called_time = None
-
-    def __call__(self, *args, **kwargs):
-        if hasattr(self.func, '_mp'):
-            self.lock.acquire()
-            if self.last_called_time is not None and \
-                    (datetime.datetime.now() - self.last_called_time).total_seconds() <= 1:
-                time.sleep(1)
-            try:
-                return self.func(*args, **kwargs)
-            except AdbOfflineError as e:
-                run_adb_cmd('kill-server')
-                run_adb_cmd('start-server')
-                time.sleep(1)
-
-                # try again!
-                try:
-                    return self.func(*args, **kwargs)
-                except Exception as e2:
-                    self.last_called_time = datetime.datetime.now()
-                    self.lock.release()
-                    raise e
-            except Exception as e:
-                self.last_called_time = datetime.datetime.now()
-                self.lock.release()
-                raise
-        else:
-            return self.func(*args, **kwargs)
 
 def get_package_name(apk_path):
     res = run_cmd("{} dump badging {} | grep package | awk '{{print $2}}' | sed s/name=//g | sed s/\\'//g".format(
