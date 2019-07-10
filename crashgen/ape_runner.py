@@ -54,9 +54,7 @@ def run_ape(apk_path, avd_name, running_minutes=20):
         APE_ROOT,
         'com.android.commands.monkey.Monkey',
         args
-    ), serial=avd.serial)
-
-    print(ret)
+    ), serial=avd.serial, realtime=True)
 
 if __name__ == "__main__":
     apk_path = sys.argv[1]

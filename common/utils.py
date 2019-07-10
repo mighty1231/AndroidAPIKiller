@@ -23,7 +23,7 @@ def _put_serial(serial):
     else:
         raise ValueError("Serial must be integer or string: {}".format(serial))
 
-def run_adb_cmd(orig_cmd, serial=None, timeout=None):
+def run_adb_cmd(orig_cmd, serial=None, timeout=None, realtime=False):
     # timeout should be string, for example '2s'
     # adb_binary = os.path.join(getConfig()['SDK_PATH'], 'platform-tools/adb')
     adb_binary = 'adb'
@@ -31,25 +31,41 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None):
     if timeout is not None:
         cmd = 'timeout {} {}'.format(timeout, cmd)
 
-    pipe = subprocess.Popen(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-    out, err = pipe.communicate()
-    if isinstance(out, bytes):
-        out = out.decode('utf-8')
-        err = err.decode('utf-8')
+    if realtime:
+        proc = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
 
-    res = out
-    if not out:
-        res = err
+        for line in iter(proc.stdout.readline, b''):
+            print(line.rstrip().decode('utf-8'))
 
-    if pipe.returncode > 0:
-        if 'device offline' in err:
-            run_cmd('{} kill-server'.format(adb_binary))
-            return run_adb_cmd(orig_cmd, serial, timeout)
-        print("Executing %s" % cmd)
-        raise RunCmdError(out, err)
+        if proc.returncode > 0:
+            if 'device offline' in err:
+                run_cmd('{} kill-server'.format(adb_binary))
+                return run_adb_cmd(orig_cmd, serial, timeout, realtime)
+            print("Executing %s" % cmd)
+            raise RunCmdError(out, err)
 
-    return res
+        return ''
+    else:
+        proc = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+        out, err = proc.communicate()
+        if isinstance(out, bytes):
+            out = out.decode('utf-8')
+            err = err.decode('utf-8')
+
+        res = out
+        if not out:
+            res = err
+
+        if proc.returncode > 0:
+            if 'device offline' in err:
+                run_cmd('{} kill-server'.format(adb_binary))
+                return run_adb_cmd(orig_cmd, serial, timeout, realtime)
+            print("Executing %s" % cmd)
+            raise RunCmdError(out, err)
+
+        return res
 
 def run_cmd(cmd, cwd=None, env=None):
     pipe = subprocess.Popen(
