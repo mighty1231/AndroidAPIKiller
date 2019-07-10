@@ -6,15 +6,67 @@ import time
 import re
 
 def print_status():
+    # get all available devices
+    avdmanager = getConfig()['AVDMANAGER_PATH']
+    output = run_cmd('{} list avd'.format(avdmanager))
+
+    # parse result for avdmanager list avd
+    avd_list = []
+    try:
+        lines = output.split('\n')
+        assert lines[0].startswith('Parsing ')
+
+        i = 1
+        while i < len(lines) and lines[i] != '':
+            name   = re.match(r'Name: (.*)', lines[i].lstrip()).groups()[0]
+            device = re.match(r'Device: (.*)', lines[i+1].lstrip()).groups()[0]
+            path   = re.match(r'Path: (.*)', lines[i+2].lstrip()).groups()[0]
+            target = re.match(r'Target: (.*)', lines[i+3].lstrip()).groups()[0]
+            base, tag = re.match(r'Based on: (.*) Tag/ABI: (.*)', lines[i+4].lstrip()).groups()
+            skin   = re.match(r'Skin: (.*)', lines[i+5].lstrip()).groups()[0]
+            sdcard = re.match(r'Sdcard: (.*)', lines[i+6].lstrip()).groups()[0]
+            i += 8
+            avd_list.append((name, device, path, target, base, tag, skin, sdcard))
+    except Exception as e:
+        print('Unexpected form for avdmanager list avd')
+        print('Result of avdmanger list avd -->')
+        print(output)
+        print()
+        print(sys.exc_info())
+
+    # fetch currently running devices
+    running_avds = dict() # (name, serial)
     res = run_adb_cmd('devices')
-
     assert res.count('\n') >= 2, res
-
     for line in res.split('\n')[1:]:
         if line == '':
             continue
-        print(line.split())
-    print('res', repr(res))
+        serial = line.split()[0]
+
+        # At now, assert all devices are based on emulator
+        avd_name = run_adb_cmd('emu avd name', serial=serial).split()[0]
+        running_avds[avd_name] = serial
+
+    # make clear
+    available_devices = []
+    used_devices = []
+    for avd in avd_list:
+        avd_name = avd[0]
+        if avd_name in running_avds:
+            used_devices.append((avd, running_avds[avd_name]))
+        else:
+            available_devices.append(avd)
+
+    print('Available devices')
+    for avd in available_devices:
+        print(' {}'.format(avd))
+
+    print('Running devices')
+    for avd, serial in used_devices:
+        print(' {} - {}'.format(serial, avd))
+
+    return available_devices, used_devices
+
 
 def kill_emulator(serial = None):
     try:
@@ -173,7 +225,7 @@ if __name__ == "__main__":
 
     subparsers = parser.add_subparsers(dest='func')
 
-    list_parser = subparsers.add_parser('list')
+    list_parser = subparsers.add_parser('status')
 
     run_parser = subparsers.add_parser('run')
     run_parser.add_argument('device_name', action='store', type=str)
@@ -182,19 +234,26 @@ if __name__ == "__main__":
     run_parser.add_argument('--wipe_data', action='store_true')
     run_parser.add_argument('--writable_system', action='store_true')
 
+    arbi_parser = subparsers.add_parser('exec')
+    arbi_parser.add_argument('expression', action='store', type=str)
+
     args = parser.parse_args()
-    if args.func == 'list':
-        pass
+    if args.func == 'status':
+        print_status()
     elif args.func == 'run':
         try:
             port = int(args.port)
         except (TypeError, ValueError):
             port = args.port
         emulator_run_and_wait(args.device_name,
-            snapshot=args.snapshot,
             serial=port,
+            snapshot=args.snapshot,
             wipe_data=args.wipe_data,
             writable_system=args.writable_system
         )
+    elif args.func == 'exec':
+        print('Executing {}...'.format(args.expression))
+        retval = exec(args.expression)
+        print('Return value for {}: {}'.format(args.expression, retval))
     else:
         raise
