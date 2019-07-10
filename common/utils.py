@@ -3,6 +3,8 @@ import os
 import subprocess
 from config import getConfig
 import functools
+import multiprocessing as mp
+import datetime, time
 
 class RunCmdError(Exception):
     def __init__(self, out, err):
@@ -12,6 +14,13 @@ class RunCmdError(Exception):
 
         self.out = out
         self.err = err
+
+class AdbOfflineError(Exception):
+    def __init__(self):
+        super(AdbOfflineError, self).__init__(
+            'adb offline error - try '\
+            'adb kill-server && adb start-server'
+        )
 
 def _put_serial(serial):
     if serial is None:
@@ -23,6 +32,7 @@ def _put_serial(serial):
     else:
         raise ValueError("Serial must be integer or string: {}".format(serial))
 
+@MultiprocessingDelayDecorator
 def run_adb_cmd(orig_cmd, serial=None, timeout=None, realtime=False):
     # timeout should be string, for example '2s'
     # adb_binary = os.path.join(getConfig()['SDK_PATH'], 'platform-tools/adb')
@@ -36,18 +46,21 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None, realtime=False):
             cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
 
         offline_error = False
+        output = []
         for line in iter(proc.stdout.readline, b''):
             line = line.rstrip().decode('utf-8')
+            output.append(line)
             if 'error: device offline' in line:
                 offline_error = True
 
         if proc.poll() > 0:
             if offline_error:
-                run_adb_cmd('kill-server')
-                print('run_adb_cmd(): offline error with command', cmd)
+                raise AdbOfflineError()
             else:
                 print('run_adb_cmd(): error with command', cmd)
-            raise RuntimeError()
+                print('run_adb_cmd(): output:')
+                print(output)
+            raise RunCmdError('', output)
 
         return ''
     else:
@@ -64,8 +77,7 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None, realtime=False):
 
         if proc.returncode > 0:
             if 'error: device offline' in err:
-                run_adb_cmd('kill-server')
-                return run_adb_cmd(orig_cmd, serial, timeout, realtime)
+                raise AdbOfflineError()
             print("Executing %s" % cmd)
             raise RunCmdError(out, err)
 
@@ -123,6 +135,39 @@ class CacheDecorator:
                 del self.recent_values[-1]
 
             return value
+
+class MultiprocessingDelayDecorator: # assume that it only used on run_adb_cmd (offline error things...)
+    def __init__(self, f):
+        self.func = f
+        self.lock = mp.Lock()
+        self.last_called_time = None
+
+    def __call__(self, *args, **kwargs):
+        if hasattr(self.func, '_mp'):
+            self.lock.acquire()
+            if self.last_called_time is not None and \
+                    (datetime.datetime.now() - self.last_called_time).total_seconds() <= 1:
+                time.sleep(1)
+            try:
+                return self.func(*args, **kwargs)
+            except AdbOfflineError as e:
+                run_adb_cmd('kill-server')
+                run_adb_cmd('start-server')
+                time.sleep(1)
+
+                # try again!
+                try:
+                    return self.func(*args, **kwargs)
+                except Exception as e2:
+                    self.last_called_time = datetime.datetime.now()
+                    self.lock.release()
+                    raise e
+            except Exception as e:
+                self.last_called_time = datetime.datetime.now()
+                self.lock.release()
+                raise
+        else:
+            return self.func(*args, **kwargs)
 
 def get_package_name(apk_path):
     res = run_cmd("{} dump badging {} | grep package | awk '{{print $2}}' | sed s/name=//g | sed s/\\'//g".format(

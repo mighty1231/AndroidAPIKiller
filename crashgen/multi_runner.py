@@ -41,6 +41,7 @@ if __name__ == "__main__":
 
     avd_cnt = len(avd_names)
     time.sleep(2)
+    run_adb_cmd._mp = True # Turn on MultiprocessingDelayDecorator
     run_adb_cmd('kill-server')
     run_adb_cmd('start-server')
     time.sleep(2)
