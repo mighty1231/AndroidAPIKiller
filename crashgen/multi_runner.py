@@ -19,7 +19,7 @@ def run_ape_task(avd_name, apk_queue, error_queue):
         except RunCmdError as e:
             error_queue.put((avd_name, apk_path, e.out, e.err))
         except Exception as e:
-            error_queue.put((avd_name, apk_path, e, sys.exc_info()[0], traceback.format_exc()))
+            error_queue.put((avd_name, apk_path, sys.exc_info()[0], traceback.format_exc()))
 
 if __name__ == "__main__":
     apk_files = sorted(glob.glob(sys.argv[1]))

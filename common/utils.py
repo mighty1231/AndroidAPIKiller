@@ -16,10 +16,10 @@ class RunCmdError(Exception):
         self.err = err
 
 class AdbOfflineError(Exception):
-    def __init__(self):
+    def __init__(self, msg):
         super(AdbOfflineError, self).__init__(
             'adb offline error - try '\
-            'adb kill-server && adb start-server'
+            'adb kill-server && adb start-server\n' + msg
         )
 
 class CacheDecorator:
@@ -123,7 +123,7 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None, realtime=False):
 
         if proc.poll() > 0:
             if offline_error:
-                raise AdbOfflineError()
+                raise AdbOfflineError(output)
             else:
                 print('run_adb_cmd(): error with command', cmd)
                 print('run_adb_cmd(): output:')
@@ -145,7 +145,7 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None, realtime=False):
 
         if proc.returncode > 0:
             if 'error: device offline' in err:
-                raise AdbOfflineError()
+                raise AdbOfflineError(err)
             print("Executing %s" % cmd)
             raise RunCmdError(out, err)
 
