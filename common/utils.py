@@ -120,6 +120,7 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None, realtime=False):
             output.append(line)
             if 'error: device offline' in line:
                 offline_error = True
+        output = '\n'.join(output)
 
         if proc.poll() > 0:
             if offline_error:
