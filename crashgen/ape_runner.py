@@ -21,16 +21,20 @@ def install_ape_and_make_snapshot(avd_name, force_snapshot=False):
 
     if avd.running:
         if not force_snapshot and APE_READY_SS in list_snapshots(serial = avd.serial):
-            load_snapshot(APE_READY_SS, serial=avd.serial)
+            load_snapshot(APE_READY_SS, serial = avd.serial)
             return avd
         kill_emulator(serial = avd.serial)
         time.sleep(10)
 
-    serial = emulator_run_and_wait(avd_name, wipe_data=True)
-    print('Setup emulator...')
-    emulator_setup(serial=serial)
-    run_adb_cmd('push ape.jar {}'.format(APE_ROOT), serial=serial)
-    save_snapshot(APE_READY_SS, serial=serial)
+    serial = emulator_run_and_wait(avd_name, snapshot = APE_READY_SS)
+    if APE_READY_SS not in list_snapshots(serial = serial):
+        print('No saved snapshot on the device, rebooting and making snapshot...')
+        kill_emulator(serial = serial)
+        serial = emulator_run_and_wait(avd_name, wipe_data = True)
+        print('Setup emulator...')
+        emulator_setup(serial = serial)
+        run_adb_cmd('push ape.jar {}'.format(APE_ROOT), serial = serial)
+        save_snapshot(APE_READY_SS, serial = serial)
     avd.setRunning(serial)
     return avd
 
@@ -58,4 +62,4 @@ if __name__ == "__main__":
     apk_path = sys.argv[1]
     avd_name = sys.argv[2]
 
-    run_ape(apk_path, avd_name)
+    run_ape(apk_path, avd_name, 1)

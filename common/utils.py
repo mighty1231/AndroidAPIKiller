@@ -51,11 +51,9 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None):
 
     return res
 
-def run_cmd(cmd, **kwargs):
-    # Examples for kwargs
-    #  - cwd=something, env=something, pass_fds=something
+def run_cmd(cmd, cwd=None, env=None):
     pipe = subprocess.Popen(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, **kwargs)
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, cwd=cwd, env=env)
     out, err = pipe.communicate()
     if isinstance(out, bytes):
         out = out.decode('utf-8')
