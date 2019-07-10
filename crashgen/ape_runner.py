@@ -33,17 +33,17 @@ def install_ape_and_make_snapshot(avd_name, force_snapshot=False):
         serial = emulator_run_and_wait(avd_name, wipe_data = True)
         print('Setup emulator...')
         emulator_setup(serial = serial)
-        run_adb_cmd('push ape.jar {}'.format(APE_ROOT), serial = serial)
+        run_adb_cmd('push ape.jar {}'.format(APE_ROOT), serial = serial, realtime=True)
         save_snapshot(APE_READY_SS, serial = serial)
     avd.setRunning(serial)
     return avd
 
-def run_ape(apk_path, avd_name, running_minutes=20):
+def run_ape(apk_path, avd_name, output_dir, running_minutes=20):
     package_name = get_package_name(apk_path)
     print('Installing APE...')
 
     avd = install_ape_and_make_snapshot(avd_name)
-    run_adb_cmd('install {}'.format(apk_path), serial=avd.serial)
+    run_adb_cmd('install {}'.format(apk_path), serial=avd.serial, realtime=True)
 
     # run ape
     print('Running APE...')
@@ -56,8 +56,20 @@ def run_ape(apk_path, avd_name, running_minutes=20):
         args
     ), serial=avd.serial, realtime=True)
 
+    fetch_result(output_dir, avd.serial)
+
+def fetch_result(output_dir, serial):
+    ret = run_adb_cmd('shell ls /sdcard/', serial=serial)
+    folder = None
+    for line in ret.split('\n'):
+        if line.startswith('sata-'):
+            assert folder is None, "Error: Multiple folder for outputs..."
+            folder = '/sdcard/{}'.format(line.rstrip())
+    run_adb_cmd('pull {} {}'.format(folder, output_dir), serial=serial, realtime=True)
+
 if __name__ == "__main__":
     apk_path = sys.argv[1]
     avd_name = sys.argv[2]
+    output_dir = sys.argv[3]
 
-    run_ape(apk_path, avd_name, 1)
+    run_ape(apk_path, avd_name, output_dir)

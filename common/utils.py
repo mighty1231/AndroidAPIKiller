@@ -38,8 +38,8 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None, realtime=False):
         for line in iter(proc.stdout.readline, b''):
             print(line.rstrip().decode('utf-8'))
 
-        if proc.returncode > 0:
-            if 'device offline' in err:
+        if proc.poll() > 0:
+            if 'error: device offline' in err:
                 run_cmd('{} kill-server'.format(adb_binary))
                 return run_adb_cmd(orig_cmd, serial, timeout, realtime)
             print("Executing %s" % cmd)
@@ -59,7 +59,7 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None, realtime=False):
             res = err
 
         if proc.returncode > 0:
-            if 'device offline' in err:
+            if 'error: device offline' in err:
                 run_cmd('{} kill-server'.format(adb_binary))
                 return run_adb_cmd(orig_cmd, serial, timeout, realtime)
             print("Executing %s" % cmd)

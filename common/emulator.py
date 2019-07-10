@@ -210,7 +210,6 @@ def emulator_run_and_wait(avd_name, serial=None, snapshot=None, wipe_data=False,
         run_adb_cmd("remount", serial=serial)
         run_adb_cmd("shell su root mount -o remount,rw /system", serial=serial)
     os.close(r_fd)
-    # proc.communicate()
 
     return serial
 
