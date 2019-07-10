@@ -24,12 +24,13 @@ def install_ape_and_make_snapshot(avd_name, force_snapshot=False):
             load_snapshot(APE_READY_SS, serial = avd.serial)
             return avd
         kill_emulator(serial = avd.serial)
-        time.sleep(10)
+        time.sleep(3)
 
     serial = emulator_run_and_wait(avd_name, snapshot = APE_READY_SS)
     if APE_READY_SS not in list_snapshots(serial = serial):
         print('No saved snapshot on the device, rebooting and making snapshot...')
         kill_emulator(serial = serial)
+        time.sleep(3)
         serial = emulator_run_and_wait(avd_name, wipe_data = True)
         print('Setup emulator...')
         emulator_setup(serial = serial)

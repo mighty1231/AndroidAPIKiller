@@ -35,15 +35,19 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None, realtime=False):
         proc = subprocess.Popen(
             cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
 
+        offline_error = False
         for line in iter(proc.stdout.readline, b''):
-            print(line.rstrip().decode('utf-8'))
+            line = line.rstrip().decode('utf-8')
+            if 'error: device offline' in line:
+                offline_error = True
 
         if proc.poll() > 0:
-            if 'error: device offline' in err:
-                run_cmd('{} kill-server'.format(adb_binary))
-                return run_adb_cmd(orig_cmd, serial, timeout, realtime)
-            print("Executing %s" % cmd)
-            raise RunCmdError(out, err)
+            if offline_error:
+                run_adb_cmd('kill-server')
+                print('run_adb_cmd(): offline error with command', cmd)
+            else:
+                print('run_adb_cmd(): error with command', cmd)
+            raise RuntimeError()
 
         return ''
     else:
@@ -60,7 +64,7 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None, realtime=False):
 
         if proc.returncode > 0:
             if 'error: device offline' in err:
-                run_cmd('{} kill-server'.format(adb_binary))
+                run_adb_cmd('kill-server')
                 return run_adb_cmd(orig_cmd, serial, timeout, realtime)
             print("Executing %s" % cmd)
             raise RunCmdError(out, err)

@@ -53,10 +53,10 @@ def _run_avdmanager_list_avd():
 
         i = 1
         while i < len(lines) and lines[i] != '':
-            name   = re.match(r'Name: (.*)', lines[i].lstrip()).groups()[0]
-            device = re.match(r'Device: (.*)', lines[i+1].lstrip()).groups()[0]
-            path   = re.match(r'Path: (.*)', lines[i+2].lstrip()).groups()[0]
-            target = re.match(r'Target: (.*)', lines[i+3].lstrip()).groups()[0]
+            name      = re.match(r'Name: (.*)', lines[i].lstrip()).groups()[0]
+            device    = re.match(r'Device: (.*)', lines[i+1].lstrip()).groups()[0]
+            path      = re.match(r'Path: (.*)', lines[i+2].lstrip()).groups()[0]
+            target    = re.match(r'Target: (.*)', lines[i+3].lstrip()).groups()[0]
             base, tag = re.match(r'Based on: (.*) Tag/ABI: (.*)', lines[i+4].lstrip()).groups()
 
             # now, optional arguments - Skin, Sdcard, Snapshot
@@ -259,6 +259,37 @@ def emulator_setup(serial = None):
         res = run_adb_cmd("push {} /mnt/sdcard/".format(os.path.join(folder, file)), serial=serial)
         print(res)
 
+def create_avd(name, sdkversion, tag, device, sdcard):
+    avdmanager = getConfig()['AVDMANAGER_PATH']
+
+    assert tag in ['default', 'google_apis'], tag
+    assert sdkversion.startswith('android-'), sdkversion
+
+    package = "system-images;{};{};x86".format(sdkversion, tag)
+    cmd = "{} create avd --force --name '{}' --package '{}' "\
+          "--sdcard {} --device '{}'".format(
+            avdmanager,
+            name,
+            package,
+            sdcard,
+            device
+        )
+    try:
+        ret = run_cmd(cmd)
+        print('Create avd success')
+    except RunCmdError as e:
+        print('CREATE_AVD failed')
+        if 'Package path is not valid' in e.err:
+            print(e.err)
+            print('Currently set package path is {}'.format(package))
+            print('You would install new package with sdkmanager')
+        else:
+            print('RunCmdError: out')
+            print(e.out)
+            print('RunCmdError: err')
+            print(e.err)
+
+
 if __name__ == "__main__":
     '''
     Run emulator
@@ -287,6 +318,13 @@ if __name__ == "__main__":
 
     setup_parser = subparsers.add_parser('setup')
     setup_parser.add_argument('serial', action='store', type=str)
+
+    create_parser = subparsers.add_parser('create')
+    create_parser.add_argument('name', action='store')
+    create_parser.add_argument('--sdkversion', action='store', default='android-22')
+    create_parser.add_argument('--tag', action='store', default='default')
+    create_parser.add_argument('--device', action='store', default='Nexus 5')
+    create_parser.add_argument('--sdcard', action='store', default='512M')
 
     args = parser.parse_args()
     if args.func == 'status':
@@ -318,5 +356,7 @@ if __name__ == "__main__":
         except (TypeError, ValueError):
             serial = args.serial
         emulator_setup(serial = serial)
+    elif args.func == 'create':
+        create_avd(args.name, args.sdkversion, args.tag, args.device, args.sdcard)
     else:
         raise
