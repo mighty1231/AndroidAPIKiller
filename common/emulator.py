@@ -6,15 +6,14 @@ import time
 import re
 
 class AVD:
-    def __init__(self, name, device, path, target, base, tag, skin, sdcard):
+    def __init__(self, name, device, path, target, base, tag, optional_pairs):
         self.name = name
         self.device = device
         self.path = path
         self.target = target
         self.base = base
         self.tag = tag
-        self.skin = skin
-        self.sdcard = sdcard
+        self.optional_pairs = optional_pairs
 
         # Two cases:
         #    running (there is serial)
@@ -35,7 +34,7 @@ class AVD:
     def getDetail(self):
         ret = []
         for attr in ['device', 'path', 'target', 'base', 'tag',
-                'skin', 'sdcard', 'running', 'sdcard', 'running', 'serial']:
+                'optional_pairs', 'running', 'serial']:
             ret.append('AVD<{}>.{} = {}'.format(self.name, attr, getattr(self, attr)))
         return '\n'.join(ret)
 
@@ -59,15 +58,25 @@ def _run_avdmanager_list_avd():
             path   = re.match(r'Path: (.*)', lines[i+2].lstrip()).groups()[0]
             target = re.match(r'Target: (.*)', lines[i+3].lstrip()).groups()[0]
             base, tag = re.match(r'Based on: (.*) Tag/ABI: (.*)', lines[i+4].lstrip()).groups()
-            skin   = re.match(r'Skin: (.*)', lines[i+5].lstrip()).groups()[0]
-            sdcard = re.match(r'Sdcard: (.*)', lines[i+6].lstrip()).groups()[0]
-            avd = (name, device, path, target, base, tag, skin, sdcard)
+
+            # now, optional arguments - Skin, Sdcard, Snapshot
+            i += 5
+            optional_pairs = []
+            while i < len(lines) and lines[i] != '' and not lines[i].startswith('----'):
+                sep = lines[i].index(':')
+                key = lines[i][:sep].strip()
+                value = lines[i][sep+1:].strip()
+                optional_pairs.append((key, value))
+                i += 1
+            if lines[i].startswith('----'):
+                i += 1
+
+            avd = (name, device, path, target, base, tag, optional_pairs)
 
             if tag.startswith('google_apis_playstore'):
                 print('Warning: AVD[{}] cannot be rooted'.format(name), file=sys.stderr)
             else:
                 avd_list.append(avd)
-            i += 8
 
     except Exception as e:
         print('Error: Unexpected form on avdmanager list avd', file=sys.stderr)
@@ -99,12 +108,6 @@ def get_avd_list(warned = False):
                 break
 
     return avd_list
-
-
-def print_avd_status():
-    avd_list = get_avd_list()
-    for avd in avd_list:
-        print(avd)
 
 def kill_emulator(serial = None):
     try:
@@ -270,6 +273,7 @@ if __name__ == "__main__":
     subparsers = parser.add_subparsers(dest='func')
 
     list_parser = subparsers.add_parser('status')
+    list_parser.add_argument('--detail', action='store_true')
 
     run_parser = subparsers.add_parser('run')
     run_parser.add_argument('device_name', action='store', type=str)
@@ -286,7 +290,13 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     if args.func == 'status':
-        print_avd_status()
+        avd_list = get_avd_list()
+        if args.detail:
+            for avd in avd_list:
+                print(avd.getDetail())
+        else:
+            for avd in avd_list:
+                print(avd)
     elif args.func == 'run':
         try:
             port = int(args.port)
