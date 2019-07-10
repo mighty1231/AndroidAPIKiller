@@ -116,6 +116,11 @@ def _check_port_is_available(port):
         return True
 
 def emulator_run_and_wait(avd_name, serial=None, snapshot=None, wipe_data=False, writable_system=False):
+    # check avd
+    avd_list = get_avd_list()
+    if any(a.running and a.name == avd_name for a in avd_list):
+        raise RuntimeError('AVD with {} is already running'.format(avd_name))
+
     r_fd, w_fd = os.pipe()
 
     if serial is None:
@@ -269,6 +274,9 @@ if __name__ == "__main__":
     arbi_parser = subparsers.add_parser('exec')
     arbi_parser.add_argument('expression', action='store', type=str)
 
+    setup_parser = subparsers.add_parser('setup')
+    setup_parser.add_argument('serial', action='store', type=str)
+
     args = parser.parse_args()
     if args.func == 'status':
         print_avd_status()
@@ -287,5 +295,11 @@ if __name__ == "__main__":
         print('Executing {}...'.format(args.expression))
         retval = exec(args.expression)
         print('Return value for {}: {}'.format(args.expression, retval))
+    elif args.func == 'setup':
+        try:
+            serial = int(args.serial)
+        except (TypeError, ValueError):
+            serial = args.serial
+        emulator_setup(serial = serial)
     else:
         raise
