@@ -4,6 +4,7 @@ import glob
 import os
 import traceback
 import time
+import queue
 
 sys.path.insert(0, '../common')
 from emulator import get_avd_list
@@ -18,8 +19,10 @@ def run_ape_task(avd_name, apk_queue, error_queue):
             run_ape(apk_path, avd_name, output_dir, running_minutes=1)
         except RunCmdError as e:
             error_queue.put((avd_name, apk_path, e.out, e.err))
+            break
         except Exception as e:
             error_queue.put((avd_name, apk_path, sys.exc_info()[0], traceback.format_exc()))
+            break
 
 if __name__ == "__main__":
     apk_files = sorted(glob.glob(sys.argv[1]))
@@ -34,24 +37,36 @@ if __name__ == "__main__":
 
     # Check AVDs
     avd_names = sys.argv[2:]
-    avd_available_names = map(lambda t:t.name, get_avd_list())
-    assert all(avd in avd_available_names for avd in avd_names)
+    avd_available_names = list(map(lambda t:t.name, get_avd_list()))
+    assert all(avd in avd_available_names for avd in avd_names), (avd_names, avd_available_names)
     for avd_name in avd_names:
         install_ape_and_make_snapshot(avd_name)
 
     avd_cnt = len(avd_names)
+    for i in range(avd_cnt):
+        apk_queue.put('STOP')
+
     from utils import _set_multiprocessing
     _set_multiprocessing()
 
+    jobs = []
     for avd_name in avd_names:
-        mp.Process(target=run_ape_task, args=(avd_name, apk_queue, error_queue)).start()
+        proc = mp.Process(target=run_ape_task, args=(avd_name, apk_queue, error_queue))
+        jobs.append(proc)
+        proc.start()
+
     apk_queue.close()
-    apk_queue.join_thread()
+
+    for job in jobs:
+        job.join()
 
     i = 0
-    for error in iter(error_queue.get, 'STOP'):
-        print('Error #{} - {} {}'.format(i, error[0], error[1]))
-        for e in error[2:]:
-            print(e)
-        i += 1
-
+    try:
+        while True:
+            error = error_queue.get_nowait()
+            print('Error #{} - {} {}'.format(i, error[0], error[1]))
+            for e in error[2:]:
+                print(e)
+            i += 1
+    except queue.Empty:
+        pass

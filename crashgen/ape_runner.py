@@ -41,13 +41,12 @@ def install_ape_and_make_snapshot(avd_name, force_snapshot=False):
 
 def run_ape(apk_path, avd_name, output_dir, running_minutes=1):
     package_name = get_package_name(apk_path)
-    print('Installing APE...')
-
+    print('run_ape(): given apk_path {} avd_name {}'.format(apk_path, avd_name))
     avd = install_ape_and_make_snapshot(avd_name)
     run_adb_cmd('install {}'.format(apk_path), serial=avd.serial)
 
     # run ape
-    print('Running APE...')
+    print('run_ape(): Emulator[{}, {}] Running APE with apk={}'.format(avd_name, avd.serial, apk_path))
     args = '-p {} --running-minutes {} --ape sata --bugreport'.format(package_name, running_minutes)
     ret = run_adb_cmd('shell CLASSPATH={} {} {} {} {}'.format(
         os.path.join(APE_ROOT, 'ape.jar'),

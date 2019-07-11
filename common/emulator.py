@@ -145,7 +145,7 @@ def emulator_run_and_wait(avd_name, serial=None, snapshot=None, wipe_data=False,
                 if serial > 5584:
                     raise RuntimeError
         assert _check_port_is_available(serial+1) == True
-        print('RunEmulator: Port set to {}, {}'.format(serial, serial+1))
+        print('RunEmulator[{}]: Port set to {}, {}'.format(avd_name, serial, serial+1))
     elif type(serial) == str:
         serial = re.match(r'emulator-(\w+)', serial).groups()[0]
     else:
@@ -159,7 +159,7 @@ def emulator_run_and_wait(avd_name, serial=None, snapshot=None, wipe_data=False,
         '-avd', avd_name
     ]
     if snapshot is not None and wipe_data:
-        print("RunEmulator: Warning, wipe_data would remove all of snapshots")
+        print("RunEmulator[{}, {}]: Warning, wipe_data would remove all of snapshots".format(avd_name, serial))
     if snapshot is not None:
         # This option would not raise any exception,
         #   even if there is no snapshot with specified name.
@@ -184,13 +184,13 @@ def emulator_run_and_wait(avd_name, serial=None, snapshot=None, wipe_data=False,
     not_found_cnt = 0
     while not bootanim.startswith('stopped'):
         try:
-            print('RunEmulator: shell getprop init.svc.bootanim')
+            print('RunEmulator[{}, {}]: shell getprop init.svc.bootanim'.format(avd_name, serial))
             bootanim = run_adb_cmd('shell getprop init.svc.bootanim', serial=serial)
         except RunCmdError as e:
             if 'not found' in e.err and not_found_cnt < 4:
                 not_found_cnt += 1
             else:
-                print('RunEmulator: Failed, check following log from emulator')
+                print('RunEmulator[{}, {}]: Failed, check following log from emulator'.format(avd_name, serial))
                 print('RunCmdError: out', e.out)
                 print('RunCmdError: err', e.err)
                 kill_emulator(serial=serial)
@@ -202,7 +202,7 @@ def emulator_run_and_wait(avd_name, serial=None, snapshot=None, wipe_data=False,
                     print(line, end='')
                 handle.close()
                 raise RuntimeError
-        print('RunEmulator: Waiting for booting emulator')
+        print('RunEmulator[{}, {}]: Waiting for booting emulator'.format(avd_name, serial))
         time.sleep(5)
 
     # turn off keyboard
