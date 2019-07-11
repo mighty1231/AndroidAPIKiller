@@ -9,11 +9,27 @@ import fcntl
 
 _adb_mp_delay = False # multiprocessing delay
 
+def _set_multiprocessing():
+    global _adb_mp_delay
+    _adb_mp_delay = True
+
+class AdbLongProcessBreak(Exception):
+    pass
+
+class AdbOfflineErrorBreak(Exception):
+    def __init__(self, msg):
+        super(AdbOfflineErrorBreak, self).__init__(
+            'adb offline error - try '\
+            'adb kill-server && adb start-server\n' + msg
+        )
+
 class AdbMultiprocessingDelay:
     _last_called_time = None
     _lock = mp.Lock()
-    def __init__(self, time_lock, delay_in_seconds = 1):
+
+    def __init__(self, delay_in_seconds = 1):
         self.delay = delay_in_seconds
+        self.status = None
 
     def __enter__(self):
         AdbMultiprocessingDelay._lock.acquire()
@@ -23,9 +39,15 @@ class AdbMultiprocessingDelay:
                 time.sleep(self.delay - timediff)
         return self
 
-    def __exit__(self, type, value, traceback):
+    def __exit__(self, etype, value, traceback):
         AdbMultiprocessingDelay._last_called_time = datetime.datetime.now()
         AdbMultiprocessingDelay._lock.release()
+        if etype == AdbOfflineErrorBreak:
+            self.status = 'offline'
+            return True
+        elif etype == AdbLongProcessBreak:
+            self.status = 'longproc'
+            return True
 
 class RunCmdError(Exception):
     def __init__(self, out, err, cmd=''):
@@ -39,12 +61,6 @@ class RunCmdError(Exception):
         self.err = err
         self.cmd = cmd
 
-class AdbOfflineError(Exception):
-    def __init__(self, msg):
-        super(AdbOfflineError, self).__init__(
-            'adb offline error - try '\
-            'adb kill-server && adb start-server\n' + msg
-        )
 
 class CacheDecorator:
     '''
@@ -107,74 +123,157 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None):
     if timeout is not None:
         cmd = 'timeout {} {}'.format(timeout, cmd)
 
-    stdout_r_fd, stdout_w_fd = os.pipe()
-    stderr_r_fd, stderr_w_fd = os.pipe()
-    proc = subprocess.Popen(
-        cmd, stdout=stdout_w_fd, stderr=stderr_w_fd, shell=True)
-    os.close(stdout_w_fd)
-    os.close(stderr_w_fd)
-    time.sleep(0.2)
-    pollval = proc.poll()
-    if pollval is None:
-        # long process
-        # stdout and stderr would be long
-        stdout_f = os.fdopen(stdout_r_fd, 'rt')
-        fcntl.fcntl(stdout_f, fcntl.F_SETFL, os.O_NONBLOCK) 
-        stderr_f = os.fdopen(stderr_r_fd, 'rt')
-        fcntl.fcntl(stderr_f, fcntl.F_SETFL, os.O_NONBLOCK) 
-        out = ''
-        err = ''
-        while pollval is None:
-            out += stdout_f.read(64)
-            err += stderr_f.read(64)
-
-            # flush
-            if '\n' in out:
-                idx = out.rindex('\n')
-                if idx > 0:
-                    for o in out[:idx].split('\n'):
-                        print('O: ' + o.rstrip())
-                out = out[idx+1:]
-            if '\n' in err:
-                idx = err.rindex('\n')
-                if idx > 0:
-                    for o in err[:idx].split('\n'):
-                        print('E: ' + o.rstrip(), file=sys.stderr)
-                err = err[idx+1:]
+    if _adb_mp_delay:
+        # multiprocessing
+        stdout_r_fd, stdout_w_fd = os.pipe()
+        stderr_r_fd, stderr_w_fd = os.pipe()
+        with AdbMultiprocessingDelay() as mpdelay:
+            proc = subprocess.Popen(
+                cmd, stdout=stdout_w_fd, stderr=stderr_w_fd, shell=True)
+            os.close(stdout_w_fd)
+            os.close(stderr_w_fd)
+            time.sleep(1)
             pollval = proc.poll()
-        out += stdout_f.read()
-        err += stderr_f.read()
-        if out:
-            for o in out.split('\n'):
-                print('O: ' + o.rstrip())
-        if err:
-            for e in err.split('\n'):
-                print('E: ' + e.rstrip(), file=sys.stderr)
+            if pollval is None:
+                # long process
+                # stdout and stderr would be long
+                # Long process -> release the lock and wait for process
+                raise AdbLongProcessBreak
+            else:
+                # process is terminated
+                # pollval is return value
+                # handle error: device offline
+                stdout_f = os.fdopen(stdout_r_fd, 'rb')
+                out = stdout_f.read().decode('utf-8')
+                stdout_f.close()
+                stderr_f = os.fdopen(stderr_r_fd, 'rb')
+                err = stderr_f.read().decode('utf-8')
+                stderr_f.close()
 
-        stdout_f.close()
-        stderr_f.close()
-        if pollval > 0:
-            raise RunCmdError('', '', cmd=cmd)
-        return ''
+                if pollval > 0:
+                    if 'error: device offline' in err:
+                        print('Device offline!')
+                        subprocess.run([adb_binary, 'kill-server'])
+                        subprocess.run([adb_binary, 'start-server'])
+                        time.sleep(0.2)
+                        raise AdbOfflineErrorBreak(out)
+                    raise RunCmdError(out, err, cmd=cmd)
+                return out
+
+        if mpdelay.status == 'longproc':
+            stdout_f = os.fdopen(stdout_r_fd, 'rt')
+            fcntl.fcntl(stdout_f, fcntl.F_SETFL, os.O_NONBLOCK)
+            stderr_f = os.fdopen(stderr_r_fd, 'rt')
+            fcntl.fcntl(stderr_f, fcntl.F_SETFL, os.O_NONBLOCK)
+            out = ''
+            err = ''
+            while pollval is None:
+                out += stdout_f.read(64)
+                err += stderr_f.read(64)
+
+                # flush
+                if '\n' in out:
+                    idx = out.rindex('\n')
+                    if idx > 0:
+                        for o in out[:idx].split('\n'):
+                            print('O: ' + o.rstrip())
+                    out = out[idx+1:]
+                if '\n' in err:
+                    idx = err.rindex('\n')
+                    if idx > 0:
+                        for o in err[:idx].split('\n'):
+                            print('E: ' + o.rstrip(), file=sys.stderr)
+                    err = err[idx+1:]
+                pollval = proc.poll()
+            out += stdout_f.read()
+            err += stderr_f.read()
+            if out:
+                for o in out.split('\n'):
+                    print('O: ' + o.rstrip())
+            if err:
+                for e in err.split('\n'):
+                    print('E: ' + e.rstrip(), file=sys.stderr)
+
+            stdout_f.close()
+            stderr_f.close()
+            if pollval > 0:
+                raise RunCmdError('', '', cmd=cmd)
+            return ''
+        elif mpdelay.status == 'offline':
+            return run_adb_cmd(orig_cmd, serial=serial, timeout=timeout)
+        else:
+            raise RuntimeError('AdbMultiprocessingDelay.status =', mpdelay.status)
     else:
-        # process is terminated
-        # pollval is return value
-        # handle error: device offline
-        stdout_f = os.fdopen(stdout_r_fd, 'rb')
-        out = stdout_f.read().decode('utf-8')
-        stdout_f.close()
-        stderr_f = os.fdopen(stderr_r_fd, 'rb')
-        err = stderr_f.read().decode('utf-8')
-        stderr_f.close()
+        # run as single process
+        stdout_r_fd, stdout_w_fd = os.pipe()
+        stderr_r_fd, stderr_w_fd = os.pipe()
+        proc = subprocess.Popen(
+            cmd, stdout=stdout_w_fd, stderr=stderr_w_fd, shell=True)
+        os.close(stdout_w_fd)
+        os.close(stderr_w_fd)
+        time.sleep(1)
+        pollval = proc.poll()
+        if pollval is None:
+            # long process
+            # stdout and stderr would be long
+            stdout_f = os.fdopen(stdout_r_fd, 'rt')
+            fcntl.fcntl(stdout_f, fcntl.F_SETFL, os.O_NONBLOCK)
+            stderr_f = os.fdopen(stderr_r_fd, 'rt')
+            fcntl.fcntl(stderr_f, fcntl.F_SETFL, os.O_NONBLOCK)
+            out = ''
+            err = ''
+            while pollval is None:
+                out += stdout_f.read(64)
+                err += stderr_f.read(64)
 
-        if retval > 0:
-            if 'error: device offline' in err:
-                print('Device offline!')
-                subprocess.run([adb_binary, 'kill-server'])
-                subprocess.run([adb_binary, 'start-server'])
-                return run_adb_cmd(orig_cmd, serial=serial, timeout=timeout)
-            raise RunCmdError(out, err, cmd=cmd)
-        return out
+                # flush
+                if '\n' in out:
+                    idx = out.rindex('\n')
+                    if idx > 0:
+                        for o in out[:idx].split('\n'):
+                            print('O: ' + o.rstrip())
+                    out = out[idx+1:]
+                if '\n' in err:
+                    idx = err.rindex('\n')
+                    if idx > 0:
+                        for o in err[:idx].split('\n'):
+                            print('E: ' + o.rstrip(), file=sys.stderr)
+                    err = err[idx+1:]
+                pollval = proc.poll()
+            out += stdout_f.read()
+            err += stderr_f.read()
+            if out:
+                for o in out.split('\n'):
+                    print('O: ' + o.rstrip())
+            if err:
+                for e in err.split('\n'):
+                    print('E: ' + e.rstrip(), file=sys.stderr)
+
+            stdout_f.close()
+            stderr_f.close()
+            if pollval > 0:
+                raise RunCmdError('', '', cmd=cmd)
+            return ''
+        else:
+            # process is terminated
+            # pollval is return value
+            # handle error: device offline
+            stdout_f = os.fdopen(stdout_r_fd, 'rb')
+            out = stdout_f.read().decode('utf-8')
+            stdout_f.close()
+            stderr_f = os.fdopen(stderr_r_fd, 'rb')
+            err = stderr_f.read().decode('utf-8')
+            stderr_f.close()
+
+            if pollval > 0:
+                if 'error: device offline' in err:
+                    print('Device offline!')
+                    subprocess.run([adb_binary, 'kill-server'])
+                    subprocess.run([adb_binary, 'start-server'])
+                    time.sleep(0.2)
+                    return run_adb_cmd(orig_cmd, serial=serial, timeout=timeout)
+                raise RunCmdError(out, err, cmd=cmd)
+            return out
 
 def run_cmd(cmd, cwd=None, env=None):
     pipe = subprocess.Popen(
