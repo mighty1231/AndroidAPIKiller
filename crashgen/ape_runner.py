@@ -23,10 +23,10 @@ def install_ape_and_make_snapshot(avd_name, force_snapshot=False):
         if not force_snapshot and APE_READY_SS in list_snapshots(serial = avd.serial):
             load_snapshot(APE_READY_SS, serial = avd.serial)
             return avd
-        kill_emulator(serial = avd.serial)
-        time.sleep(3)
+        serial = avd.serial
+    else:
+        serial = emulator_run_and_wait(avd_name, snapshot = APE_READY_SS)
 
-    serial = emulator_run_and_wait(avd_name, snapshot = APE_READY_SS)
     if APE_READY_SS not in list_snapshots(serial = serial):
         print('No saved snapshot on the device, rebooting and making snapshot...')
         kill_emulator(serial = serial)
@@ -34,17 +34,17 @@ def install_ape_and_make_snapshot(avd_name, force_snapshot=False):
         serial = emulator_run_and_wait(avd_name, wipe_data = True)
         print('Setup emulator...')
         emulator_setup(serial = serial)
-        run_adb_cmd('push ape.jar {}'.format(APE_ROOT), serial = serial, realtime=True)
+        run_adb_cmd('push ape.jar {}'.format(APE_ROOT), serial = serial)
         save_snapshot(APE_READY_SS, serial = serial)
     avd.setRunning(serial)
     return avd
 
-def run_ape(apk_path, avd_name, output_dir, running_minutes=20):
+def run_ape(apk_path, avd_name, output_dir, running_minutes=1):
     package_name = get_package_name(apk_path)
     print('Installing APE...')
 
     avd = install_ape_and_make_snapshot(avd_name)
-    run_adb_cmd('install {}'.format(apk_path), serial=avd.serial, realtime=True)
+    run_adb_cmd('install {}'.format(apk_path), serial=avd.serial)
 
     # run ape
     print('Running APE...')
@@ -55,7 +55,7 @@ def run_ape(apk_path, avd_name, output_dir, running_minutes=20):
         APE_ROOT,
         'com.android.commands.monkey.Monkey',
         args
-    ), serial=avd.serial, realtime=True)
+    ), serial=avd.serial)
 
     fetch_result(output_dir, avd.serial)
 
@@ -66,7 +66,7 @@ def fetch_result(output_dir, serial):
         if line.startswith('sata-'):
             assert folder is None, "Error: Multiple folder for outputs..."
             folder = '/sdcard/{}'.format(line.rstrip())
-    run_adb_cmd('pull {} {}'.format(folder, output_dir), serial=serial, realtime=True)
+    run_adb_cmd('pull {} {}'.format(folder, output_dir), serial=serial)
 
 if __name__ == "__main__":
     apk_path = sys.argv[1]

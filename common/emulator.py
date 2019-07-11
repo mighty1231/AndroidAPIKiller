@@ -187,12 +187,12 @@ def emulator_run_and_wait(avd_name, serial=None, snapshot=None, wipe_data=False,
             print('RunEmulator: shell getprop init.svc.bootanim')
             bootanim = run_adb_cmd('shell getprop init.svc.bootanim', serial=serial)
         except RunCmdError as e:
-            print('RunCmdError: out', e.out)
-            print('RunCmdError: err', e.err)
             if 'not found' in e.err and not_found_cnt < 4:
                 not_found_cnt += 1
             else:
                 print('RunEmulator: Failed, check following log from emulator')
+                print('RunCmdError: out', e.out)
+                print('RunCmdError: err', e.err)
                 kill_emulator(serial=serial)
                 handle = os.fdopen(r_fd, 'r')
                 while True:
