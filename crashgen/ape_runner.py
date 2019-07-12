@@ -65,6 +65,8 @@ def fetch_result(output_dir, serial):
         if line.startswith('sata-'):
             assert folder is None, "Error: Multiple folder for outputs..."
             folder = '/sdcard/{}'.format(line.rstrip())
+    if not os.path.isdir(output_dir):
+        os.makedirs(output_dir)
     run_adb_cmd('pull {} {}'.format(folder, output_dir), serial=serial)
 
 if __name__ == "__main__":

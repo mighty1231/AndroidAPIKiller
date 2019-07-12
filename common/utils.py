@@ -118,6 +118,7 @@ def _put_serial(serial):
 def run_adb_cmd(orig_cmd, serial=None, timeout=None):
     # timeout should be string, for example '2s'
     # adb_binary = os.path.join(getConfig()['SDK_PATH'], 'platform-tools/adb')
+    # @TODO Save output for long process which output size is not so big
     adb_binary = 'adb'
     cmd = '{} {} {}'.format(adb_binary, _put_serial(serial), orig_cmd)
     if timeout is not None:

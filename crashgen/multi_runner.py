@@ -19,10 +19,10 @@ def print_error(error, file=None):
     for info in etc:
         print('[{}] {}'.format(avd_name, info), file=file)
 
-def run_ape_task(avd_name, apk_queue, error_queue, running_minutes=60):
+def run_ape_task(avd_name, apk_queue, error_queue, output_dir_format, running_minutes):
     for apk_path in iter(apk_queue.get, 'STOP'):
         dirname, filename = os.path.split(apk_path)
-        output_dir = os.path.join(dirname, 'ape_output')
+        output_dir = output_dir_format.format(dirname=dirname, filename=filename)
         try:
             run_ape(apk_path, avd_name, output_dir, running_minutes=running_minutes)
         except RunCmdError as e:
@@ -37,7 +37,29 @@ def run_ape_task(avd_name, apk_queue, error_queue, running_minutes=60):
             break
 
 if __name__ == "__main__":
-    apk_files = sorted(glob.glob(sys.argv[1]))
+    '''
+    python3 multi_runner.py apklist.txt N5_22_1 N5_22_2 N5_22 --running_minutes 1 --output_dir_format "{dirname}/{filename}/ape/result/"
+    '''
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Multiprocessing runner for APE')
+    parser.add_argument('apk_list_file')
+    parser.add_argument('avd_names', nargs='*')
+    parser.add_argument('--output_dir_format', default='{dirname}/ape_output')
+    parser.add_argument('--running_minutes', default=60)
+
+    print('erwe', file=sys.stderr)
+
+    apk_files = []
+    args = parser.parse_args()
+    with open(args.apk_list_file, 'rt') as f:
+        for line in f:
+            if line == '' or line.startswith('//'):
+                continue
+            line = line.rstrip()
+            assert os.path.isfile(line), 'Parsing apk list: {} is not a file'.format(line)
+            apk_files.append(line)
+
     assert len(apk_files) >= 2
     print('Total {} apk files are found'.format(len(apk_files)))
 
@@ -48,11 +70,12 @@ if __name__ == "__main__":
     error_queue = mp.Queue()
 
     # Check AVDs
-    avd_names = sys.argv[2:]
+    avd_names = args.avd_names
     avd_available_names = list(map(lambda t:t.name, get_avd_list()))
     assert all(avd in avd_available_names for avd in avd_names), (avd_names, avd_available_names)
     avd_cnt = len(avd_names)
-    print('Total {} avd are found'.format(avd_cnt))
+    assert avd_cnt > 1
+    print('Total {} avds are found'.format(avd_cnt))
     if avd_cnt > 3:
         print('Warning: More than 3 emulator can generate error on some emulator')
 
@@ -67,7 +90,12 @@ if __name__ == "__main__":
 
     jobs = []
     for avd_name in avd_names:
-        proc = mp.Process(target=run_ape_task, args=(avd_name, apk_queue, error_queue))
+        proc = mp.Process(target=run_ape_task,
+            args=(avd_name,
+                apk_queue,
+                error_queue,
+                args.output_dir_format,
+                args.running_minutes))
         jobs.append(proc)
         proc.start()
 
