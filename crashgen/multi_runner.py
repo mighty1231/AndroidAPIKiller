@@ -6,9 +6,8 @@ import traceback
 import time
 import queue
 
-sys.path.insert(0, '../common')
-from emulator import get_avd_list
-from utils import run_adb_cmd, RunCmdError
+from androidkit import get_avd_list, run_adb_cmd, RunCmdError
+
 from ape_runner import run_ape, install_ape_and_make_snapshot
 
 def print_error(error, file=None):

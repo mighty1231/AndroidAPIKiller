@@ -1,15 +1,18 @@
 import sys, os
-sys.path.insert(0, '../common')
 
-from utils import (
+from androidkit import (
     run_adb_cmd,
     RunCmdError,
     get_package_name,
     list_snapshots,
     save_snapshot,
-    load_snapshot
+    load_snapshot,
+    get_avd_list,
+    kill_emulator,
+    emulator_run_and_wait,
+    emulator_setup
 )
-from emulator import get_avd_list, kill_emulator, emulator_run_and_wait, emulator_setup
+
 import time
 
 APE_READY_SS = 'APE_READY' # snapshot name

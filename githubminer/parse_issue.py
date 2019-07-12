@@ -11,9 +11,13 @@ import datetime
 import os
 
 import sys
-sys.path.insert(0, '../common')
-from utils import run_cmd, RunCmdError, CacheDecorator
-from config import getConfig
+
+from androidkit import (
+    run_cmd,
+    RunCmdError,
+    CacheDecorator,
+    getConfig
+)
 
 auth_header = None
 last_req_time = None
@@ -279,12 +283,6 @@ def apk_getsdkversioninfo(apk_path):
 
 
 if __name__ == "__main__":
-    # import sys
     set_auth_header()
-    # parse_issue_urls_from_csv()
-    # tm = parse_date_from_github_time('2014-03-31T11:32:44Z')
-    # get_error_version_apk('zxing', 'zxing', '2017-10-25T11:32:44Z')
-    # apk_getsdkversioninfo('BarcodeScanner-4.5.1.apk')
-
     mining_apk_and_bug_report()
 

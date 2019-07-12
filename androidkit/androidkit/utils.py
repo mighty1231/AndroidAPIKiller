@@ -1,11 +1,9 @@
-from __future__ import print_function
 import os, sys
 import subprocess
-from config import getConfig
-import functools
 import datetime, time
 import multiprocessing as mp
 import fcntl
+from .config import getConfig
 
 _adb_mp_delay = False # multiprocessing delay
 
