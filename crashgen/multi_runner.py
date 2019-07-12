@@ -48,8 +48,6 @@ if __name__ == "__main__":
     parser.add_argument('--output_dir_format', default='{dirname}/ape_output')
     parser.add_argument('--running_minutes', default=60)
 
-    print('erwe', file=sys.stderr)
-
     apk_files = []
     args = parser.parse_args()
     with open(args.apk_list_file, 'rt') as f:
