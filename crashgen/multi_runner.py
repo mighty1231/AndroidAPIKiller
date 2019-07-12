@@ -11,17 +11,29 @@ from emulator import get_avd_list
 from utils import run_adb_cmd, RunCmdError
 from ape_runner import run_ape, install_ape_and_make_snapshot
 
-def run_ape_task(avd_name, apk_queue, error_queue):
+def print_error(error, file=None):
+    avd_name, apk_path, *etc = error
+    if file is None:
+        file = sys.stdout
+    print('[{}] Error with apk={}'.format(avd_name, apk_path), file=file)
+    for info in etc:
+        print('[{}] {}'.format(avd_name, info), file=file)
+
+def run_ape_task(avd_name, apk_queue, error_queue, running_minutes=60):
     for apk_path in iter(apk_queue.get, 'STOP'):
         dirname, filename = os.path.split(apk_path)
         output_dir = os.path.join(dirname, 'ape_output')
         try:
-            run_ape(apk_path, avd_name, output_dir, running_minutes=1)
+            run_ape(apk_path, avd_name, output_dir, running_minutes=running_minutes)
         except RunCmdError as e:
-            error_queue.put((avd_name, apk_path, e.out, e.err))
+            error = (avd_name, apk_path, e.out, e.err)
+            error_queue.put(error)
+            print_error(error, file=sys.stderr)
             break
         except Exception as e:
-            error_queue.put((avd_name, apk_path, sys.exc_info()[0], traceback.format_exc()))
+            error = (avd_name, apk_path, sys.exc_info()[0], traceback.format_exc())
+            error_queue.put(error)
+            print_error(error, file=sys.stderr)
             break
 
 if __name__ == "__main__":
@@ -39,10 +51,14 @@ if __name__ == "__main__":
     avd_names = sys.argv[2:]
     avd_available_names = list(map(lambda t:t.name, get_avd_list()))
     assert all(avd in avd_available_names for avd in avd_names), (avd_names, avd_available_names)
+    avd_cnt = len(avd_names)
+    print('Total {} avd are found'.format(avd_cnt))
+    if avd_cnt > 3:
+        print('Warning: More than 3 emulator can generate error on some emulator')
+
     for avd_name in avd_names:
         install_ape_and_make_snapshot(avd_name)
 
-    avd_cnt = len(avd_names)
     for i in range(avd_cnt):
         apk_queue.put('STOP')
 
@@ -64,9 +80,9 @@ if __name__ == "__main__":
     try:
         while True:
             error = error_queue.get_nowait()
-            print('Error #{} - {} {}'.format(i, error[0], error[1]))
+            print('Error #{} - {} {}'.format(i, error[0], error[1]), file=sys.stderr)
             for e in error[2:]:
-                print(e)
+                print(e, file=sys.stderr)
             i += 1
     except queue.Empty:
         pass
