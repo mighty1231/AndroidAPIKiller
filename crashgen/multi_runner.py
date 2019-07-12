@@ -6,7 +6,12 @@ import traceback
 import time
 import queue
 
-from androidkit import get_avd_list, run_adb_cmd, RunCmdError
+from androidkit import (
+    get_avd_list,
+    run_adb_cmd,
+    RunCmdError,
+    set_multiprocessing_mode
+)
 
 from ape_runner import run_ape, install_ape_and_make_snapshot
 
@@ -82,8 +87,7 @@ if __name__ == "__main__":
     for i in range(avd_cnt):
         apk_queue.put('STOP')
 
-    from utils import _set_multiprocessing
-    _set_multiprocessing()
+    set_multiprocessing_mode()
 
     jobs = []
     for avd_name in avd_names:

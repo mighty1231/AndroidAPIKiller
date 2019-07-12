@@ -5,7 +5,8 @@ from .utils import (
 	get_package_name,
 	list_snapshots,
 	save_snapshot,
-	load_snapshot
+	load_snapshot,
+	set_multiprocessing_mode
 )
 from .config import getConfig
 from .avd import get_avd_list, create_avd

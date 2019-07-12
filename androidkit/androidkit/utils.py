@@ -7,7 +7,7 @@ from .config import getConfig
 
 _adb_mp_delay = False # multiprocessing delay
 
-def _set_multiprocessing():
+def set_multiprocessing_mode():
     global _adb_mp_delay
     _adb_mp_delay = True
 
