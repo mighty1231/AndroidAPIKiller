@@ -128,13 +128,14 @@ def create_avd(name, sdkversion, tag, device, sdcard):
         )
     try:
         ret = run_cmd(cmd)
-        print('Create avd success')
+        print('create_avd success')
     except RunCmdError as e:
-        print('CREATE_AVD failed')
+        print('create_avd failed')
         if 'Package path is not valid' in e.err:
             print(e.err)
-            print('Currently set package path is {}'.format(package))
-            print('You would install new package with sdkmanager')
+            print('You would install the package {} with sdkmanager'.format(package))
+            sdkmanager_path = os.path.join(os.path.split(package)[0], 'sdkmanager')
+            print('Try {} {}'.format(sdkmanager_path, package))
         else:
             print('RunCmdError: out')
             print(e.out)

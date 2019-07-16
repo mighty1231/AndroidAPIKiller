@@ -11,7 +11,7 @@ def getConfig():
     config_json_path = os.path.join(folder, 'config.json')
     if _config is None:
         if not os.path.isfile(config_json_path):
-            with open(config_json_path, 'rt') as f:
+            with open(config_json_path, 'wt') as f:
                 f.write("{\n")
                 f.write("\t\"SDK_PATH\":\"/SOMETHING/Android/Sdk\",\n")
                 f.write("\t\"AAPT_PATH\":\"/SOMETHING/Android/Sdk/SOMETHING/aapt\"\n")
