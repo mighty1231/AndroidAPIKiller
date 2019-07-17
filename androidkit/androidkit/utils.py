@@ -116,7 +116,6 @@ def _put_serial(serial):
 def run_adb_cmd(orig_cmd, serial=None, timeout=None):
     # timeout should be string, for example '2s'
     # adb_binary = os.path.join(getConfig()['SDK_PATH'], 'platform-tools/adb')
-    # @TODO Save output for long process which output size is not so big
     adb_binary = 'adb'
     cmd = '{} {} {}'.format(adb_binary, _put_serial(serial), orig_cmd)
     if timeout is not None:
@@ -131,7 +130,7 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None):
                 cmd, stdout=stdout_w_fd, stderr=stderr_w_fd, shell=True)
             os.close(stdout_w_fd)
             os.close(stderr_w_fd)
-            time.sleep(1)
+            time.sleep(0.8)
             pollval = proc.poll()
             if pollval is None:
                 # long process
@@ -164,10 +163,17 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None):
             fcntl.fcntl(stdout_f, fcntl.F_SETFL, os.O_NONBLOCK)
             stderr_f = os.fdopen(stderr_r_fd, 'rt')
             fcntl.fcntl(stderr_f, fcntl.F_SETFL, os.O_NONBLOCK)
+            out_is_long = False
+            total_out = ''
             out = ''
             err = ''
             while pollval is None:
-                out += stdout_f.read(64)
+                cur_out = stdout_f.read(64)
+                if not out_is_long:
+                    total_out += cur_out
+                    if len(total_out) >= 10000:
+                        out_is_long = True
+                out += cur_out
                 err += stderr_f.read(64)
 
                 # flush
@@ -184,7 +190,10 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None):
                             print('E: ' + o.rstrip(), file=sys.stderr)
                     err = err[idx+1:]
                 pollval = proc.poll()
-            out += stdout_f.read()
+            cur_out = stdout_f.read()
+            if not out_is_long:
+                total_out += cur_out
+            out += cur_out
             err += stderr_f.read()
             if out:
                 for o in out.split('\n'):
@@ -197,7 +206,7 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None):
             stderr_f.close()
             if pollval > 0:
                 raise RunCmdError('', '', cmd=cmd)
-            return ''
+            return total_out
         elif mpdelay.status == 'offline':
             return run_adb_cmd(orig_cmd, serial=serial, timeout=timeout)
         else:
@@ -210,7 +219,7 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None):
             cmd, stdout=stdout_w_fd, stderr=stderr_w_fd, shell=True)
         os.close(stdout_w_fd)
         os.close(stderr_w_fd)
-        time.sleep(1)
+        time.sleep(0.8)
         pollval = proc.poll()
         if pollval is None:
             # long process
@@ -219,10 +228,17 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None):
             fcntl.fcntl(stdout_f, fcntl.F_SETFL, os.O_NONBLOCK)
             stderr_f = os.fdopen(stderr_r_fd, 'rt')
             fcntl.fcntl(stderr_f, fcntl.F_SETFL, os.O_NONBLOCK)
+            out_is_long = False
+            total_out = ''
             out = ''
             err = ''
             while pollval is None:
-                out += stdout_f.read(64)
+                cur_out = stdout_f.read(64)
+                if not out_is_long:
+                    total_out += cur_out
+                    if len(total_out) >= 10000:
+                        out_is_long = True
+                out += cur_out
                 err += stderr_f.read(64)
 
                 # flush
@@ -239,7 +255,10 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None):
                             print('E: ' + o.rstrip(), file=sys.stderr)
                     err = err[idx+1:]
                 pollval = proc.poll()
-            out += stdout_f.read()
+            cur_out = stdout_f.read()
+            if not out_is_long:
+                total_out += cur_out
+            out += cur_out
             err += stderr_f.read()
             if out:
                 for o in out.split('\n'):
@@ -252,7 +271,7 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None):
             stderr_f.close()
             if pollval > 0:
                 raise RunCmdError('', '', cmd=cmd)
-            return ''
+            return total_out
         else:
             # process is terminated
             # pollval is return value
