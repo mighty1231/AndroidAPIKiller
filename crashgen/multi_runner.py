@@ -30,7 +30,7 @@ def run_ape_task(avd_name, apk_queue, error_queue, output_dir_format, running_mi
         try:
             run_ape(apk_path, avd_name, output_dir, running_minutes=running_minutes)
         except RunCmdError as e:
-            error = (avd_name, apk_path, e.out, e.err)
+            error = (avd_name, apk_path, ('out', e.out), ('err', e.err))
             error_queue.put(error)
             print_error(error, file=sys.stderr)
             break

@@ -113,7 +113,7 @@ def _put_serial(serial):
     else:
         raise ValueError("Serial must be integer or string: {}".format(serial))
 
-def run_adb_cmd(orig_cmd, serial=None, timeout=None):
+def run_adb_cmd(orig_cmd, serial=None, timeout=None, restart_cnt=0):
     # timeout should be string, for example '2s'
     # adb_binary = os.path.join(getConfig()['SDK_PATH'], 'platform-tools/adb')
     adb_binary = 'adb'
@@ -149,8 +149,9 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None):
                 stderr_f.close()
 
                 if pollval > 0:
-                    if 'error: device offline' in err:
-                        print('Device offline!')
+                    if 'error: device offline' in err or ( \
+                            'error: device' in err and 'not found' in err):
+                        printf("Restarting server...", file=sys.stderr)
                         subprocess.run([adb_binary, 'kill-server'])
                         subprocess.run([adb_binary, 'start-server'])
                         time.sleep(0.2)
@@ -205,10 +206,15 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None):
             stdout_f.close()
             stderr_f.close()
             if pollval > 0:
-                raise RunCmdError('', '', cmd=cmd)
+                raise RunCmdError(total_out, '', cmd=cmd)
             return total_out
         elif mpdelay.status == 'offline':
-            return run_adb_cmd(orig_cmd, serial=serial, timeout=timeout)
+            if restart_cnt < 2:
+                print('E: device offline error', file=sys.stderr)
+                return run_adb_cmd(orig_cmd, serial=serial, timeout=timeout, restart_cnt=restart_cnt+1)
+            else:
+                print('E: device offline error more than 2 times', file=sys.stderr)
+                raise RunCmdError('', '', cmd=cmd)
         else:
             raise RuntimeError('AdbMultiprocessingDelay.status =', mpdelay.status)
     else:
@@ -270,7 +276,7 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None):
             stdout_f.close()
             stderr_f.close()
             if pollval > 0:
-                raise RunCmdError('', '', cmd=cmd)
+                raise RunCmdError(total_out, '', cmd=cmd)
             return total_out
         else:
             # process is terminated
@@ -285,11 +291,15 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None):
 
             if pollval > 0:
                 if 'error: device offline' in err:
-                    print('Device offline!')
                     subprocess.run([adb_binary, 'kill-server'])
                     subprocess.run([adb_binary, 'start-server'])
                     time.sleep(0.2)
-                    return run_adb_cmd(orig_cmd, serial=serial, timeout=timeout)
+                    if restart_cnt < 2:
+                        print('E: device offline error', file=sys.stderr)
+                        return run_adb_cmd(orig_cmd, serial=serial, timeout=timeout, restart_cnt=restart_cnt+1)
+                    else:
+                        print('E: device offline error more than 2 times', file=sys.stderr)
+                        raise RunCmdError(out, err, cmd=cmd)
                 raise RunCmdError(out, err, cmd=cmd)
             return out
 
