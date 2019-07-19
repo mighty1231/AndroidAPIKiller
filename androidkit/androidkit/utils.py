@@ -151,7 +151,7 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None, restart_cnt=0):
                 if pollval > 0:
                     if 'error: device offline' in err or ( \
                             'error: device' in err and 'not found' in err):
-                        printf("Restarting server...", file=sys.stderr)
+                        print("Restarting server...", file=sys.stderr)
                         subprocess.run([adb_binary, 'kill-server'])
                         subprocess.run([adb_binary, 'start-server'])
                         time.sleep(0.2)
