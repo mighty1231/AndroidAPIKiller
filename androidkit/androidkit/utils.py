@@ -349,3 +349,27 @@ def list_snapshots(serial = None):
             ret.append(name)
 
         return ret
+
+def extract_apk(package_name, ofname, serial = None):
+    cmd = 'shell pm path {}'.format(package_name)
+    out = run_adb_cmd(cmd, serial=serial)
+    lines = out.split()
+    if len(lines) == 0:
+        print('Package {} is not found'.format(package_name))
+        raise RuntimeError
+    if len(lines) >= 2:
+        print('Package {} seems to be sliced apk.'.format(package_name),
+              'Is the app debugging purpose?')
+        for i, line in enumerate(lines):
+            print('out[{}] = {}'.format(i, line))
+        print('Current version does not support for sliced apks')
+        raise RuntimeError
+    if not lines[0].startswith('package:'):
+        print('Not expected output for cmd: {}'.format(cmd))
+        for i, line in enumerate(lines):
+            print('out[{}] = {}'.format(i, line))
+        raise RuntimeError
+
+    apk_path = lines[0][8:]
+    run_adb_cmd('pull {} {}'.format(apk_path, ofname), serial=serial)
+    print('Package {} is pulled into {}'.format(package_name, ofname))

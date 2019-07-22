@@ -6,7 +6,8 @@ from .utils import (
 	list_snapshots,
 	save_snapshot,
 	load_snapshot,
-	set_multiprocessing_mode
+	set_multiprocessing_mode,
+	extract_apk
 )
 from .config import getConfig
 from .avd import get_avd_list, create_avd
