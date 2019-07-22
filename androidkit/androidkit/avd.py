@@ -40,12 +40,27 @@ class AVD:
             ret.append('AVD<{}>.{} = {}'.format(self.name, attr, getattr(self, attr)))
         return '\n'.join(ret)
 
+def run_avdmanager(cmd):
+    # wrapper for avdmanager
+    avdmanager = getConfig()['AVDMANAGER_PATH']
+    try:
+        output = run_cmd('{} {}'.format(avdmanager, cmd))
+        return output
+    except RunCmdError as e:
+        if 'AvdManagerCli : Unsupported major.minor version' in e.err:
+            TAG = "Androidkit.run_avdmanager: "
+            print(TAG + "Problem on versions of java or javac", file=sys.stderr)
+            print(TAG + "Following commands would be help for debugging", file=sys.stderr)
+            print(TAG + " - which (java|javac)", file=sys.stderr)
+            print(TAG + " - echo ($JAVA_HOME|$PATH)", file=sys.stderr)
+            print(TAG + " - sudo update-alternatives --config (java|javac)", file=sys.stderr)
+        raise
+
 @CacheDecorator
 def _run_avdmanager_list_avd():
     # get all available devices
     # this function seems not be changed, so use cache
-    avdmanager = getConfig()['AVDMANAGER_PATH']
-    output = run_cmd('{} list avd'.format(avdmanager))
+    output = run_avdmanager('list avd')
 
     # parse result for avdmanager list avd
     avd_list = []
@@ -112,22 +127,19 @@ def get_avd_list(warned = False):
     return avd_list
 
 def create_avd(name, sdkversion, tag, device, sdcard):
-    avdmanager = getConfig()['AVDMANAGER_PATH']
-
     assert tag in ['default', 'google_apis'], tag
     assert sdkversion.startswith('android-'), sdkversion
 
     package = "system-images;{};{};x86".format(sdkversion, tag)
-    cmd = "{} create avd --force --name '{}' --package '{}' "\
+    cmd = "create avd --force --name '{}' --package '{}' "\
           "--sdcard {} --device '{}'".format(
-            avdmanager,
             name,
             package,
             sdcard,
             device
         )
     try:
-        ret = run_cmd(cmd)
+        ret = run_avdmanager(cmd)
         print('create_avd success')
     except RunCmdError as e:
         print('create_avd failed')
