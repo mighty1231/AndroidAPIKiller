@@ -2,7 +2,6 @@ import sys, os
 
 from androidkit import (
     run_adb_cmd,
-    RunCmdError,
     get_package_name,
     list_snapshots,
     save_snapshot,

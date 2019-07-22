@@ -15,11 +15,13 @@ class AdbLongProcessBreak(Exception):
     pass
 
 class AdbOfflineErrorBreak(Exception):
-    def __init__(self, msg):
+    def __init__(self, out, err):
         super(AdbOfflineErrorBreak, self).__init__(
             'adb offline error - try '\
-            'adb kill-server && adb start-server\n' + msg
+            'adb kill-server && adb start-server\n'
         )
+        self.out = out
+        self.err = err
 
 class AdbMultiprocessingDelay:
     _last_called_time = None
@@ -28,6 +30,7 @@ class AdbMultiprocessingDelay:
     def __init__(self, delay_in_seconds = 1):
         self.delay = delay_in_seconds
         self.status = None
+        self.excval = None
 
     def __enter__(self):
         AdbMultiprocessingDelay._lock.acquire()
@@ -40,6 +43,7 @@ class AdbMultiprocessingDelay:
     def __exit__(self, etype, value, traceback):
         AdbMultiprocessingDelay._last_called_time = datetime.datetime.now()
         AdbMultiprocessingDelay._lock.release()
+        self.excval = value
         if etype == AdbOfflineErrorBreak:
             self.status = 'offline'
             return True
@@ -48,17 +52,27 @@ class AdbMultiprocessingDelay:
             return True
 
 class RunCmdError(Exception):
-    def __init__(self, out, err, cmd=''):
-        msg = "----------------------------------------------------\n"
-        if cmd:
-            msg += "Command: {}\n".format(cmd)
-        msg += "Out: %s\nError: %s" % (out, err)
+    def __init__(self, cmd, out, err):
         super(RunCmdError, self).__init__(msg)
 
+        self.cmd = cmd
         self.out = out
         self.err = err
-        self.cmd = cmd
+        self._message = None
 
+    @property
+    def message(self):
+        if self._message is not None:
+            return self._message
+        msg = "--- RunCmdError.command [{}] ---\n".format(cmd)
+        if self.out is not None:
+            msg += "--- RunCmdError.out ---\n"
+            msg += self.out
+        if self.err is not None:
+            msg += "--- RunCmdError.err ---\n"
+            msg += self.err
+        self._message = msg
+        return msg
 
 class CacheDecorator:
     '''
@@ -155,8 +169,8 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None, restart_cnt=0):
                         subprocess.run([adb_binary, 'kill-server'])
                         subprocess.run([adb_binary, 'start-server'])
                         time.sleep(0.2)
-                        raise AdbOfflineErrorBreak(out)
-                    raise RunCmdError(out, err, cmd=cmd)
+                        raise AdbOfflineErrorBreak(out, err)
+                    raise RunCmdError(cmd, out, err)
                 return out
 
         if mpdelay.status == 'longproc':
@@ -206,7 +220,7 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None, restart_cnt=0):
             stdout_f.close()
             stderr_f.close()
             if pollval > 0:
-                raise RunCmdError(total_out, '', cmd=cmd)
+                raise RunCmdError(cmd, total_out, None)
             return total_out
         elif mpdelay.status == 'offline':
             if restart_cnt < 2:
@@ -214,7 +228,7 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None, restart_cnt=0):
                 return run_adb_cmd(orig_cmd, serial=serial, timeout=timeout, restart_cnt=restart_cnt+1)
             else:
                 print('E: device offline error more than 2 times', file=sys.stderr)
-                raise RunCmdError('', '', cmd=cmd)
+                raise mpdelay.excval
         else:
             raise RuntimeError('AdbMultiprocessingDelay.status =', mpdelay.status)
     else:
@@ -276,7 +290,7 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None, restart_cnt=0):
             stdout_f.close()
             stderr_f.close()
             if pollval > 0:
-                raise RunCmdError(total_out, '', cmd=cmd)
+                raise RunCmdError(cmd, total_out, None)
             return total_out
         else:
             # process is terminated
@@ -299,8 +313,8 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None, restart_cnt=0):
                         return run_adb_cmd(orig_cmd, serial=serial, timeout=timeout, restart_cnt=restart_cnt+1)
                     else:
                         print('E: device offline error more than 2 times', file=sys.stderr)
-                        raise RunCmdError(out, err, cmd=cmd)
-                raise RunCmdError(out, err, cmd=cmd)
+                        raise RunCmdError(cmd, out, err)
+                raise RunCmdError(cmd, out, err)
             return out
 
 def run_cmd(cmd, cwd=None, env=None):
@@ -316,7 +330,7 @@ def run_cmd(cmd, cwd=None, env=None):
         res = err
 
     if pipe.returncode > 0:
-        raise RunCmdError(out, err, cmd=cmd)
+        raise RunCmdError(cmd, out, err)
 
     return res
 

@@ -14,7 +14,6 @@ import sys
 
 from androidkit import (
     run_cmd,
-    RunCmdError,
     CacheDecorator,
     getConfig
 )

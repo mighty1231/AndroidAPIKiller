@@ -149,7 +149,4 @@ def create_avd(name, sdkversion, tag, device, sdcard):
             sdkmanager_path = os.path.join(os.path.split(package)[0], 'sdkmanager')
             print('Try {} {}'.format(sdkmanager_path, package))
         else:
-            print('RunCmdError: out')
-            print(e.out)
-            print('RunCmdError: err')
-            print(e.err)
+            print(e.message)

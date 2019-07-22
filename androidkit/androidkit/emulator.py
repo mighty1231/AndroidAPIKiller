@@ -72,9 +72,8 @@ def emulator_run_and_wait(avd_name, serial=None, snapshot=None, wipe_data=False,
             if 'not found' in e.err and not_found_cnt < 4:
                 not_found_cnt += 1
             else:
-                print('RunEmulator[{}, {}]: Failed, check following log from emulator'.format(avd_name, serial))
-                print('RunCmdError: out', e.out)
-                print('RunCmdError: err', e.err)
+                print('RunEmulator[{}, {}]: Failed, check follow message'.format(avd_name, serial))
+                print(e.message)
                 kill_emulator(serial=serial)
                 handle = os.fdopen(r_fd, 'r')
                 while True:
@@ -142,12 +141,7 @@ def emulator_setup(serial = None):
         print(res)
 
 def kill_emulator(serial = None):
-    try:
-        run_adb_cmd('emu kill', serial = serial)
-    except RunCmdError as e:
-        print('Exception on emu kill')
-        print('RunCmdError: out', e.out)
-        print('RunCmdError: err', e.err)
+    run_adb_cmd('emu kill', serial = serial)
 
 def _check_port_is_available(port):
     try:
