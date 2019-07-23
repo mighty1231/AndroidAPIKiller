@@ -54,7 +54,7 @@ class AdbMultiprocessingDelay:
 
 class RunCmdError(Exception):
     def __init__(self, cmd, out, err):
-        super(RunCmdError, self).__init__(msg)
+        super(RunCmdError, self).__init__(err)
 
         self.cmd = cmd
         self.out = out
@@ -65,13 +65,14 @@ class RunCmdError(Exception):
     def message(self):
         if self._message is not None:
             return self._message
-        msg = "--- RunCmdError.command [{}] ---\n".format(cmd)
+        msg = "--- RunCmdError.command [{}] ---\n".format(self.cmd)
         if self.out is not None:
             msg += "--- RunCmdError.out ---\n"
             msg += self.out
         if self.err is not None:
             msg += "--- RunCmdError.err ---\n"
             msg += self.err
+        msg += "-----------------------\n"
         self._message = msg
         return msg
 

@@ -74,7 +74,7 @@ def emulator_run_and_wait(avd_name, serial=None, snapshot=None, wipe_data=False,
             else:
                 print('RunEmulator[{}, {}]: Failed, check follow message'.format(avd_name, serial))
                 print(e.message)
-                kill_emulator(serial=serial)
+                print('RunEmulator[{}, {}]: Following message from proc'.format(avd_name, serial))
                 handle = os.fdopen(r_fd, 'r')
                 while True:
                     line = handle.readline()
@@ -82,7 +82,7 @@ def emulator_run_and_wait(avd_name, serial=None, snapshot=None, wipe_data=False,
                         break
                     print(line, end='')
                 handle.close()
-                raise RuntimeError
+                exit(-1)
         print('RunEmulator[{}, {}]: Waiting for booting emulator'.format(avd_name, serial))
         time.sleep(5)
 
