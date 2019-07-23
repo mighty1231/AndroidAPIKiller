@@ -3,6 +3,7 @@ import subprocess
 import datetime, time
 import multiprocessing as mp
 import fcntl
+import re
 from .config import getConfig
 
 _adb_mp_delay = False # multiprocessing delay
@@ -387,3 +388,68 @@ def extract_apk(package_name, ofname, serial = None):
     apk_path = lines[0][8:]
     run_adb_cmd('pull {} {}'.format(apk_path, ofname), serial=serial)
     print('Package {} is pulled into {}'.format(package_name, ofname))
+
+def get_activity_stack(serial = None):
+    # get_activity_stack returns list of list of activities
+    # adb shell dumpsys activity activities | grep -i run
+    #  ->
+    #    Running activities (most recent first):
+    #        Run #1: ActivityRecord{de9e636 u0 com.android.systemui/.recents.RecentsActivity t68} // <- foreground activity
+    #        Run #0: ActivityRecord{508c61b u0 com.android.launcher3/.Launcher t4}
+    #    Running activities (most recent first):
+    #        Run #4: ActivityRecord{4bf664e u0 org.y20k.transistor/.MainActivity t93}
+    #        Run #3: ActivityRecord{ab339e1 u0 com.android.dialer/.settings.DialerSettingsActivity t90}
+    #        Run #2: ActivityRecord{31283e2 u0 com.android.dialer/.DialtactsActivity t90}
+    #        Run #1: ActivityRecord{15fdbee u0 com.android.chrome/org.chromium.chrome.browser.ChromeTabbedActivity t94}
+    #        Run #0: ActivityRecord{b69107c u0 com.google.android.youtube/com.google.android.apps.youtube.app.WatchWhileActivity t91}
+
+    # In this situation, get_activity_stack() should return
+    #  [['com.android.systemui/.recents.RecentsActivity',
+    #    'com.android.launcher3/.Launcher'],
+    #   ['org.y20k.transistor/.MainActivity',
+    #    'com.android.dialer/.settings.DialerSettingsActivity',
+    #    'com.android.dialer/.DialtactsActivity',
+    #    'com.android.chrome/org.chromium.chrome.browser.ChromeTabbedActivity',
+    #    'com.google.android.youtube/com.google.android.apps.youtube.app.WatchWhileActivity']]
+
+    dumped = run_adb_cmd('shell dumpsys activity activities')
+    stack_pattern = re.compile(r'\n    Running activities \(most recent first\):')
+
+    # https://github.com/aosp-mirror/platform_frameworks_base/blob/master/services/core/java/com/android/server/am/ActivityRecord.java#L3007
+    activity_pattern = re.compile(
+        r'\n        Run #([0-9]*): ActivityRecord\{[^ ]* [^ ]* ([^ ]*) [^ ]*( f)?\}'
+    )
+    divisions = list(map(lambda t: t.end(), stack_pattern.finditer(dumped)))
+
+    stacks = []
+    N = len(divisions)
+    for i in range(N):
+        if i == N - 1:
+            activities = activity_pattern.findall(dumped, divisions[i])
+        else:
+            activities = activity_pattern.findall(dumped, divisions[i],
+                                                  divisions[i + 1])
+        stacks.append(activities)  # [('1', '(Activity#1)'), ('0', '(Activity#0)')]
+
+    # check validity
+    ret = []
+    for stack in stacks:
+        length = len(stack)
+        cur_stack = []
+        for i, (idx, act, _finished) in enumerate(stack):
+            if str(length - i - 1) != idx:
+                ERROR_LOG_FILE = 'err.txt'
+                with open(ERROR_LOG_FILE, 'wt') as f:
+                    f.write(dumped)
+                    f.write('\n')
+                    f.write('{}'.format(stack))
+
+                raise RuntimeError(
+                    "data seems not valid, dumped in file:{}".format(
+                        ERROR_LOG_FILE))
+
+            cur_stack.append(act)
+
+        ret.append(cur_stack)
+
+    return ret

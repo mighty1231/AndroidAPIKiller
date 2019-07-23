@@ -1,9 +1,9 @@
 import argparse
 from .avd import get_avd_list, create_avd
 from .emulator import emulator_run_and_wait, emulator_setup
-from .utils import extract_apk
+from .utils import extract_apk, get_activity_stack
 
-parser = argparse.ArgumentParser(description='Manages android emulator')
+parser = argparse.ArgumentParser(description='Tools to manage android devices')
 
 subparsers = parser.add_subparsers(dest='func')
 
@@ -33,12 +33,16 @@ create_parser.add_argument('--device', default='Nexus 5')
 create_parser.add_argument('--sdcard', default='512M')
 
 extract_parser = subparsers.add_parser('extractapk',
-    help='Extract installed apk file from emulator')
+    help='Extract installed apk file from device')
 extract_parser.add_argument('package_name')
 extract_parser.add_argument('output_dir_or_file',
     help="Interpreted as file with '*.apk', otherwise interpreted as directory. " \
          "For latter case, file name is set to (package_name).apk")
 extract_parser.add_argument('--serial', default=None)
+
+activity_stack_parser = subparsers.add_parser('activitystack',
+    help='Print current activity stack on device')
+activity_stack_parser.add_argument('--serial', default=None)
 
 def parse_serial(serial):
     try:
@@ -85,5 +89,12 @@ elif args.func == 'extractapk':
     target = os.path.join(args.output_dir_or_file, '{}.apk'.format(args.package_name))
 
     extract_apk(args.package_name, target, serial = parse_serial(args.serial))
+elif args.func == 'activitystack':
+    stacks = get_activity_stack(serial = parse_serial(args.serial))
+    for i, stack in enumerate(stacks):
+        print('Stack #{}'.format(i))
+
+        for j, activity in enumerate(stack):
+            print('  Activity #{} {}'.format(len(stack)-j, activity))
 else:
     raise
