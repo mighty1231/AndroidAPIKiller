@@ -454,3 +454,29 @@ def get_activity_stack(serial = None):
         ret.append(cur_stack)
 
     return ret
+
+def get_uid(package_name, serial=None):
+    res = run_adb_cmd('shell dumpsys package {} | grep userId'.format(
+                package_name), serial = serial)
+    uid = int(re.findall(r"userId=([0-9]+)", res)[0])
+    return uid
+
+def get_pids(package_name, serial=None):
+    try:
+        res = run_adb_cmd('shell ps'.format(package_name),
+                serial=serial)
+    except RunCmdError as e:
+        # maybe the app is not running
+        return []
+
+    pids = []
+    lines = res.split('\n')
+    for line in lines:
+        line = line.rstrip()
+        if line == '':
+            break
+        tokens = line.split()
+        if tokens[-1] == package_name:
+            pids.append(int(tokens[1]))
+
+    return pids

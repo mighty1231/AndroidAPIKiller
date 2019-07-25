@@ -8,7 +8,9 @@ from .utils import (
 	load_snapshot,
 	set_multiprocessing_mode,
 	extract_apk,
-	get_activity_stack
+	get_activity_stack,
+	get_uid,
+	get_pids
 )
 from .config import getConfig
 from .avd import get_avd_list, create_avd
