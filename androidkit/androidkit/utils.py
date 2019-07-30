@@ -129,7 +129,8 @@ def _put_serial(serial):
     else:
         raise ValueError("Serial must be integer or string: {}".format(serial))
 
-def run_adb_cmd(orig_cmd, serial=None, timeout=None, restart_cnt=0):
+def run_adb_cmd(orig_cmd, serial=None, timeout=None, restart_cnt=0,
+        stdout_callback = None, stderr_callback = None):
     # timeout should be string, for example '2s'
     # adb_binary = os.path.join(getConfig()['SDK_PATH'], 'platform-tools/adb')
     adb_binary = 'adb'
@@ -198,13 +199,19 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None, restart_cnt=0):
                     idx = out.rindex('\n')
                     if idx > 0:
                         for o in out[:idx].split('\n'):
-                            print('O: ' + o.rstrip())
+                            if stdout_callback is None:
+                                print('O: ' + o.rstrip())
+                            else:
+                                stdout_callback(o.rstrip())
                     out = out[idx+1:]
                 if '\n' in err:
                     idx = err.rindex('\n')
                     if idx > 0:
                         for o in err[:idx].split('\n'):
-                            print('E: ' + o.rstrip(), file=sys.stderr)
+                            if stderr_callback is None:
+                                print('E: ' + o.rstrip(), file=sys.stderr)
+                            else:
+                                stderr_callback(o.rstrip())
                     err = err[idx+1:]
                 pollval = proc.poll()
             cur_out = stdout_f.read()
@@ -214,10 +221,16 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None, restart_cnt=0):
             err += stderr_f.read()
             if out:
                 for o in out.split('\n'):
-                    print('O: ' + o.rstrip())
+                    if stdout_callback is None:
+                        print('O: ' + o.rstrip())
+                    else:
+                        stdout_callback(o.rstrip())
             if err:
                 for e in err.split('\n'):
-                    print('E: ' + e.rstrip(), file=sys.stderr)
+                    if stderr_callback is None:
+                        print('E: ' + e.rstrip(), file=sys.stderr)
+                    else:
+                        stderr_callback(o.rstrip())
 
             stdout_f.close()
             stderr_f.close()
@@ -268,13 +281,19 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None, restart_cnt=0):
                     idx = out.rindex('\n')
                     if idx > 0:
                         for o in out[:idx].split('\n'):
-                            print('O: ' + o.rstrip())
+                            if stdout_callback is None:
+                                print('O: ' + o.rstrip())
+                            else:
+                                stdout_callback(o.rstrip())
                     out = out[idx+1:]
                 if '\n' in err:
                     idx = err.rindex('\n')
                     if idx > 0:
                         for o in err[:idx].split('\n'):
-                            print('E: ' + o.rstrip(), file=sys.stderr)
+                            if stderr_callback is None:
+                                print('E: ' + o.rstrip(), file=sys.stderr)
+                            else:
+                                stderr_callback(o.rstrip())
                     err = err[idx+1:]
                 pollval = proc.poll()
             cur_out = stdout_f.read()
@@ -284,10 +303,16 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None, restart_cnt=0):
             err += stderr_f.read()
             if out:
                 for o in out.split('\n'):
-                    print('O: ' + o.rstrip())
+                    if stdout_callback is None:
+                        print('O: ' + o.rstrip())
+                    else:
+                        stdout_callback(o.rstrip())
             if err:
-                for e in err.split('\n'):
-                    print('E: ' + e.rstrip(), file=sys.stderr)
+                for o in err[:idx].split('\n'):
+                    if stderr_callback is None:
+                        print('E: ' + o.rstrip(), file=sys.stderr)
+                    else:
+                        stderr_callback(o.rstrip())
 
             stdout_f.close()
             stderr_f.close()
