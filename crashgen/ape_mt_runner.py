@@ -30,6 +30,8 @@ def run_ape_with_mt(apk_path, avd_name, mt_binary):
     apetask_proc.start()
 
     apetask_proc.join()
+
+    mtserver_proc.kill()
     mtserver_proc.join()
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 from androidkit import get_package_name, get_uid, get_pids, run_adb_cmd
 import re
-import os
+import os, sys
+import signal
 
 STATE_CONSTRUCTED = 0
 STATE_PREFIX_GIVEN = 1
@@ -16,6 +17,7 @@ class Connections:
         self.output_folder = output_folder
         self.started_processes = []
         self.connections = {}
+        self._clean_up = False
 
     def _check_processes(self):
         # Check processes are alive or not
@@ -71,12 +73,16 @@ class Connections:
         print('Running processes: ', self.started_processes)
         print('Connection State: ', self.connections)
 
-    def __del__(self):
+    def clean_up(self):
+        if self._clean_up:
+            return False
+        self._clean_up = True
         print('Deleting connections...')
         for running_pid, prefix in self.started_processes:
             run_adb_cmd("shell kill {}".format(running_pid), serial=self.serial)
         self._check_processes()
         kill_mtserver()
+        return True
 
 connections = None
 log = []
@@ -116,11 +122,21 @@ def kill_mtserver(serial = None):
     for pid in pids:
         run_adb_cmd('shell kill {}'.format(pid), serial=serial)
 
+def sigterm_handler(signal, frame):
+    global connections, log
+    if connections is not None and connections.clean_up():
+        print('----- Start of the log -----')
+        for l in log:
+            print(l)
+        print('----- END of the log -----')
+    sys.exit(0)
+
 def run_mtserver(package_name, output_folder, serial=None):
     if not os.path.isdir(output_folder):
         os.makedirs(output_folder)
+    signal.signal(signal.SIGTERM, sigterm_handler)
 
-    global connections
+    global connections, log
     connections = Connections(package_name, serial, output_folder)
     uid = get_uid(package_name, serial=serial)
     kill_mtserver(serial)
@@ -132,14 +148,18 @@ def run_mtserver(package_name, output_folder, serial=None):
         print(out)
     except WrongConnectionState:
         print('Wrong state on connection! Check follow log...')
-        global log
         for line in log:
             print(line)
 
         kill_mtserver(serial)
-    except KeyboardInterrupt:
-        del connections
+    except Exception:
+        if connections.clean_up():
+            print('----- Start of the log -----')
+            for l in log:
+                print(l)
+            print('----- END of the log -----')
         raise
+
 
 if __name__ == "__main__":
     run_mtserver('com.hoi.simpleapp22', 'temp')
