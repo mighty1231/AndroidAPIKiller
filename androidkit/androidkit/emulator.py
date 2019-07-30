@@ -90,9 +90,6 @@ def emulator_run_and_wait(avd_name, serial=None, snapshot=None, wipe_data=False,
     run_adb_cmd("shell settings put secure show_ime_with_hard_keyboard 0", serial=serial)
     run_adb_cmd("root", serial=serial)
 
-    if writable_system:
-        run_adb_cmd("remount", serial=serial)
-        run_adb_cmd("shell su root mount -o remount,rw /system", serial=serial)
     os.close(r_fd)
 
     return serial
