@@ -382,8 +382,11 @@ def list_snapshots(serial = None):
     else:
         lines = res.split("\n")
         ret = []
+        assert lines[0].rstrip() == "List of snapshots present on all disks:", \
+            "Different version with mine?\n" + res
         for line in lines[2:]:
-            if line.startswith("OK"):
+            line = line.rstrip()
+            if line in ["OK", ""]:
                 break
             tokens = line.split()
             name = ' '.join(tokens[1:-4])

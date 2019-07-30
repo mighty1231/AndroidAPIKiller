@@ -62,14 +62,14 @@ def run_ape(apk_path, avd_name, output_dir, running_minutes=1):
 
 def fetch_result(output_dir, serial):
     ret = run_adb_cmd('shell ls /sdcard/', serial=serial)
-    folder = None
+    folders = []
     for line in ret.split('\n'):
         if line.startswith('sata-'):
-            assert folder is None, "Error: Multiple folder for outputs..."
-            folder = '/sdcard/{}'.format(line.rstrip())
+            folders.append('/sdcard/{}'.format(line.rstrip()))
     if not os.path.isdir(output_dir):
         os.makedirs(output_dir)
-    run_adb_cmd('pull {} {}'.format(folder, output_dir), serial=serial)
+    for folder in folders:
+        run_adb_cmd('pull {} {}'.format(folder, output_dir), serial=serial)
 
 if __name__ == "__main__":
     apk_path = sys.argv[1]

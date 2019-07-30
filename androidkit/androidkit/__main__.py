@@ -1,7 +1,15 @@
 import argparse
 from .avd import get_avd_list, create_avd
 from .emulator import emulator_run_and_wait, emulator_setup
-from .utils import extract_apk, get_activity_stack, get_uid, get_pids
+from .utils import (
+    extract_apk,
+    get_activity_stack,
+    get_uid,
+    get_pids,
+    list_snapshots,
+    load_snapshot,
+    save_snapshot
+)
 
 parser = argparse.ArgumentParser(description='Tools to manage android devices')
 
