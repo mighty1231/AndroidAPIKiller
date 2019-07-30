@@ -1,5 +1,6 @@
 from androidkit import get_package_name, get_uid, get_pids, run_adb_cmd
 import re
+import os
 
 STATE_CONSTRUCTED = 0
 STATE_PREFIX_GIVEN = 1
@@ -9,14 +10,43 @@ class WrongConnectionState(Exception):
     pass
 
 class Connections:
-    def __init__(self):
+    def __init__(self, package_name, serial, output_folder):
+        self.package_name = package_name
+        self.serial = serial
+        self.output_folder = output_folder
         self.started_processes = []
         self.connections = {}
+
+    def _check_processes(self):
+        # Check processes are alive or not
+        # If the process is dead, pull related logs
+        pids = get_pids(self.package_name,
+                serial=self.serial)
+        remaining_procs = []
+        for running_pid, prefix in self.started_processes:
+            if running_pid not in pids:
+                print("Process Termination, pid", running_pid)
+                out = run_adb_cmd('shell ls {}*'.format(prefix),
+                        serial=self.serial)
+                for line in out.split():
+                    if line == '':
+                        break
+                    fname = line.rstrip()
+                    print(" - pulling and removing {}".format(fname))
+                    run_adb_cmd("pull {} {}".format(fname, self.output_folder),
+                            serial=self.serial)
+                    run_adb_cmd("shell rm {}".format(fname),
+                            serial=self.serial)
+            else:
+                remaining_procs.append((running_pid, prefix))
+        self.started_processes = remaining_procs
+
 
     def new_connection(self, socketfd, pid):
         if socketfd in self.connections:
             raise WrongConnectionState
         self.connections[socketfd] = (STATE_CONSTRUCTED, pid)
+        self._check_processes()
 
     def give_prefix(self, socketfd, prefix):
         if socketfd not in self.connections:
@@ -26,21 +56,29 @@ class Connections:
         if state != STATE_CONSTRUCTED:
             raise WrongConnectionState
         self.connections[socketfd] = (STATE_PREFIX_GIVEN, (pid, prefix))
-        print('new connection with pid', pid, 'prefix', prefix)
+        print('New Connection! pid', pid, 'prefix', prefix)
 
     def close_connection(self, socketfd):
         if socketfd not in self.connections:
             raise WrongConnectionState
 
-        self.started_processes.append(self.connections[socketfd])
+        state, (pid, prefix) = self.connections[socketfd]
+        if state != STATE_PREFIX_GIVEN:
+            raise WrongConnectionState
+        self.started_processes.append((pid, prefix))
         del self.connections[socketfd]
 
-        print('Connection closed')
-        print('closed connections', self.started_processes)
-        print('connections', self.connections)
+        print('Running processes: ', self.started_processes)
+        print('Connection State: ', self.connections)
 
+    def __del__(self):
+        print('Deleting connections...')
+        for running_pid, prefix in self.started_processes:
+            run_adb_cmd("shell kill {}".format(running_pid), serial=self.serial)
+        self._check_processes()
+        kill_mtserver()
 
-connections = Connections()
+connections = None
 log = []
 def _stdout_callback(line):
     global log
@@ -71,19 +109,24 @@ def _stdout_callback(line):
         connections.close_connection(int(socketfd))
         return
 
-    raise WrongConnectionState
+    print("Warning: Unexpected line", line)
 
-def kill_server(serial = None):
+def kill_mtserver(serial = None):
     pids = get_pids('/data/local/tmp/mtserver', serial=serial)
     for pid in pids:
         run_adb_cmd('shell kill {}'.format(pid), serial=serial)
 
-def run_server(package_name, serial=None):
+def run_mtserver(package_name, output_folder, serial=None):
+    if not os.path.isdir(output_folder):
+        os.makedirs(output_folder)
+
+    global connections
+    connections = Connections(package_name, serial, output_folder)
     uid = get_uid(package_name, serial=serial)
-    kill_server(serial)
+    kill_mtserver(serial)
     try:
         out = run_adb_cmd('shell /data/local/tmp/mtserver server {} {}'  \
-            .format(uid, package_name),
+                .format(uid, package_name),
             stdout_callback = _stdout_callback,
             serial=serial)
         print(out)
@@ -93,7 +136,10 @@ def run_server(package_name, serial=None):
         for line in log:
             print(line)
 
-        kill_server(serial)
+        kill_mtserver(serial)
+    except KeyboardInterrupt:
+        del connections
+        raise
 
 if __name__ == "__main__":
-    run_server('com.hoi.simpleapp22')
+    run_mtserver('com.hoi.simpleapp22', 'temp')
