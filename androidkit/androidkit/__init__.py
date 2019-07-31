@@ -2,6 +2,7 @@ from .utils import (
 	run_cmd,
 	run_adb_cmd,
 	RunCmdError,
+	AdbOfflineError,
 	get_package_name,
 	list_snapshots,
 	save_snapshot,
