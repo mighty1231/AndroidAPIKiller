@@ -6,6 +6,33 @@ from .utils import run_cmd, run_adb_cmd, RunCmdError
 from .config import getConfig
 from .avd import get_avd_list
 
+def emulator_wait_for_boot(avd_name, r_fd=None, serial=None):
+    bootanim = ''
+    not_found_cnt = 0
+    while not bootanim.startswith('stopped'):
+        try:
+            print('RunEmulator[{}, {}]: shell getprop init.svc.bootanim'.format(avd_name, serial))
+            bootanim = run_adb_cmd('shell getprop init.svc.bootanim', serial=serial)
+        except RunCmdError as e:
+            if 'not found' in e.err and not_found_cnt < 4:
+                not_found_cnt += 1
+            else:
+                print('RunEmulator[{}, {}]: Failed, check follow message'.format(avd_name, serial))
+                print(e.message)
+                print('RunEmulator[{}, {}]: Following message from proc'.format(avd_name, serial))
+                if r_fd is not None:
+                    handle = os.fdopen(r_fd, 'r')
+                    while True:
+                        line = handle.readline()
+                        if not line:
+                            break
+                        print(line, end='')
+                    handle.close()
+                return False
+        print('RunEmulator[{}, {}]: Waiting for booting emulator'.format(avd_name, serial))
+        time.sleep(5)
+    return True
+
 def emulator_run_and_wait(avd_name, serial=None, snapshot=None, wipe_data=False, writable_system=False):
     # check avd
     avd_list = get_avd_list()
@@ -62,29 +89,7 @@ def emulator_run_and_wait(avd_name, serial=None, snapshot=None, wipe_data=False,
         cwd = os.path.join(getConfig()['SDK_PATH'], 'tools'))
     os.close(w_fd)
 
-    bootanim = ''
-    not_found_cnt = 0
-    while not bootanim.startswith('stopped'):
-        try:
-            print('RunEmulator[{}, {}]: shell getprop init.svc.bootanim'.format(avd_name, serial))
-            bootanim = run_adb_cmd('shell getprop init.svc.bootanim', serial=serial)
-        except RunCmdError as e:
-            if 'not found' in e.err and not_found_cnt < 4:
-                not_found_cnt += 1
-            else:
-                print('RunEmulator[{}, {}]: Failed, check follow message'.format(avd_name, serial))
-                print(e.message)
-                print('RunEmulator[{}, {}]: Following message from proc'.format(avd_name, serial))
-                handle = os.fdopen(r_fd, 'r')
-                while True:
-                    line = handle.readline()
-                    if not line:
-                        break
-                    print(line, end='')
-                handle.close()
-                exit(-1)
-        print('RunEmulator[{}, {}]: Waiting for booting emulator'.format(avd_name, serial))
-        time.sleep(5)
+    emulator_wait_for_boot(avd_name, r_fd, serial=serial)
 
     # turn off keyboard
     run_adb_cmd("shell settings put secure show_ime_with_hard_keyboard 0", serial=serial)

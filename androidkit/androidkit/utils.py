@@ -76,6 +76,9 @@ class RunCmdError(Exception):
         self._message = msg
         return msg
 
+    def __str__(self):
+        return self.message
+
 class CacheDecorator:
     '''
     Cache some results for function call with some inputs.

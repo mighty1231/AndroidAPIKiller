@@ -81,7 +81,7 @@ class Connections:
         for running_pid, prefix in self.started_processes:
             run_adb_cmd("shell kill {}".format(running_pid), serial=self.serial)
         self._check_processes()
-        kill_mtserver()
+        kill_mtserver(self.serial)
         return True
 
 connections = None
@@ -123,6 +123,7 @@ def kill_mtserver(serial = None):
         run_adb_cmd('shell kill {}'.format(pid), serial=serial)
 
 def sigterm_handler(signal, frame):
+    print('MTSERVER SIGTERM received')
     global connections, log
     if connections is not None and connections.clean_up():
         print('----- Start of the log -----')
@@ -141,6 +142,7 @@ def run_mtserver(package_name, output_folder, serial=None):
     uid = get_uid(package_name, serial=serial)
     kill_mtserver(serial)
     try:
+        print('Running mtserver...')
         out = run_adb_cmd('shell /data/local/tmp/mtserver server {} {}'  \
                 .format(uid, package_name),
             stdout_callback = _stdout_callback,
