@@ -16,7 +16,7 @@ from androidkit import (
 
 import time
 import multiprocessing as mp
-from mt_run import run_mtserver
+from mt_run import run_mtserver, kill_mtserver
 from ape_runner import fetch_result
 
 ART_APE_MT_READY_SS = "ART_APE_MT" # snapshot name
@@ -31,7 +31,7 @@ def libart_check(libart_path, serial):
 
     return size1 == size2
 
-def install_art_ape_mt(avd_name, libart_path, mtserver_path, force_clear = True):
+def install_art_ape_mt(avd_name, libart_path, mtserver_path, force_clear = False):
     avd_list = get_avd_list()
     avd = next(avd for avd in avd_list if avd.name == avd_name)
 
@@ -63,13 +63,13 @@ def install_art_ape_mt(avd_name, libart_path, mtserver_path, force_clear = True)
         emulator_wait_for_boot(avd_name, r_fd=None, serial=serial)
 
         print("Setup emulator...")
-        print(emulator_setup(serial = serial))
+        emulator_setup(serial = serial)
 
         print("Installing ape.jar")
-        print(run_adb_cmd("push ape.jar {}".format(TMP_LOCATION), serial=serial))
+        run_adb_cmd("push ape.jar {}".format(TMP_LOCATION), serial=serial)
 
         print("Installing minitrace")
-        print(run_adb_cmd("push {} {}".format(mtserver_path, TMP_LOCATION), serial=serial))
+        run_adb_cmd("push {} {}".format(mtserver_path, TMP_LOCATION), serial=serial)
 
         save_snapshot(ART_APE_MT_READY_SS, serial = serial)
         assert libart_check(libart_path, serial = avd.serial)
@@ -77,7 +77,7 @@ def install_art_ape_mt(avd_name, libart_path, mtserver_path, force_clear = True)
     return avd
 
 def ape_task(avd_name, serial, package_name, output_dir, running_minutes):
-    print('run_ape(): Emulator[{}, {}] Running APE with package {}'.format(avd_name, serial, package_name))
+    print('ape_task(): Emulator[{}, {}] Running APE with package {}'.format(avd_name, serial, package_name))
     args = '-p {} --running-minutes {} --ape sata --bugreport'.format(package_name, running_minutes)
     ret = run_adb_cmd('shell CLASSPATH={} {} {} {} {}'.format(
         os.path.join(TMP_LOCATION, 'ape.jar'),
@@ -104,26 +104,14 @@ def run_ape_with_mt(apk_path, avd_name, libart_path, mtserver_path):
     mtserver_proc = mp.Process(target=run_mtserver,
         args=(package_name, "mt_output", avd.serial))
     apetask_proc = mp.Process(target=ape_task,
-        args=(avd_name, avd.serial, package_name, "ape_output", 60))
+        args=(avd_name, avd.serial, package_name, "ape_output", 1))
 
     mtserver_proc.start()
     apetask_proc.start()
-
     apetask_proc.join()
 
-    mtserver_proc.kill()
+    kill_mtserver(serial = avd.serial)
     mtserver_proc.join()
-
-    # mtserver_proc = mp.Process(target=run_mtserver,
-    #     args=(package_name, "mt_output", avd.serial))
-
-    # mtserver_proc.start()
-
-    # try:
-    #     mtserver_proc.join()
-    # except KeyboardInterrupt:
-    #     mtserver_proc.kill()
-    #     mtserver_proc.join()
 
 if __name__ == "__main__":
     assert len(sys.argv) == 5

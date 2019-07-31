@@ -1,11 +1,9 @@
 import os, sys
 import re
-import signal
 import time
 
 from androidkit import (
     get_package_name,
-    get_uid,
     get_pids,
     run_adb_cmd,
     AdbOfflineError
@@ -38,17 +36,18 @@ class Connections:
                 print("Process Termination, pid", running_pid)
                 out = run_adb_cmd('shell ls {}*'.format(prefix),
                         serial=self.serial)
-                for line in out.split():
-                    if line == '':
-                        break
-                    fname = line.rstrip()
-                    print(" - pulling and removing {}".format(fname))
-                    run_adb_cmd("pull {} {}".format(fname, self.output_folder),
-                            serial=self.serial)
-                    run_adb_cmd("shell rm {}".format(fname),
-                            serial=self.serial)
-            else:
-                remaining_procs.append((running_pid, prefix))
+                if "No such file or directory" not in out:
+                    for line in out.split():
+                        if line == '':
+                            break
+                        fname = line.rstrip()
+                        print(" - pulling and removing {}".format(fname))
+                        run_adb_cmd("pull {} {}".format(fname, self.output_folder),
+                                serial=self.serial)
+                        run_adb_cmd("shell rm {}".format(fname),
+                                serial=self.serial)
+                    continue
+            remaining_procs.append((running_pid, prefix))
         self.started_processes = remaining_procs
 
 
@@ -89,6 +88,11 @@ class Connections:
         for running_pid, prefix in self.started_processes:
             run_adb_cmd("shell kill {}".format(running_pid), serial=self.serial)
         self._check_processes()
+
+        if self.started_processes != []:
+            print("Immediately killed processes without any invocation for MiniTrace::FlushBuffer()")
+            for running_pid, prefix in self.started_processes:
+                print(" - pid {} with prefix {}".format(running_pid, prefix))
         kill_mtserver(self.serial)
         return True
 
@@ -97,9 +101,11 @@ log = []
 def _stdout_callback(line):
     global log
     log.append(line)
-    if line.startswith('Server with'):
+    if line.startswith('Server with uid'):
+        print("mtserver: server is running")
         return
     if 'Connection attempt!' in line:
+        print("mtserver: connection attempt!")
         return
 
     global connections
@@ -130,31 +136,19 @@ def kill_mtserver(serial = None):
     for pid in pids:
         run_adb_cmd('shell kill {}'.format(pid), serial=serial)
 
-def sigterm_handler(signal, frame):
-    print('MTSERVER SIGTERM received')
-    global connections, log
-    if connections is not None and connections.clean_up():
-        print('----- Start of the log -----')
-        for l in log:
-            print(l)
-        print('----- END of the log -----')
-    sys.exit(0)
-
 def run_mtserver(package_name, output_folder, serial=None):
     if not os.path.isdir(output_folder):
         os.makedirs(output_folder)
-    signal.signal(signal.SIGTERM, sigterm_handler)
 
     global connections, log
     connections = Connections(package_name, serial, output_folder)
-    uid = get_uid(package_name, serial=serial)
 
     while True:
         kill_mtserver(serial)
         try:
             print('Running mtserver...')
-            out = run_adb_cmd('shell /data/local/tmp/mtserver server {} {}'  \
-                    .format(uid, package_name),
+            out = run_adb_cmd('shell /data/local/tmp/mtserver server {}'  \
+                    .format(package_name),
                 stdout_callback = _stdout_callback,
                 serial=serial,
                 retry_cnt=-1)
@@ -172,11 +166,20 @@ def run_mtserver(package_name, output_folder, serial=None):
             # retry due to offline error
             print("run_mtserver: retry due to offline error...")
 
+            # Those should not be called with serial
             run_adb_cmd('kill-server', retry_cnt = -1)
             run_adb_cmd('start-server', retry_cnt = -1)
 
             time.sleep(1)
             continue
+
+        except KeyboardInterrupt:
+            if connections.clean_up():
+                print('----- Start of the log -----')
+                for l in log:
+                    print(l)
+                print('----- END of the log -----')
+            raise
 
         except Exception:
             if connections.clean_up():
@@ -185,6 +188,12 @@ def run_mtserver(package_name, output_folder, serial=None):
                     print(l)
                 print('----- END of the log -----')
             raise
+
+    if connections.clean_up():
+        print('----- Start of the log -----')
+        for l in log:
+            print(l)
+        print('----- END of the log -----')
 
 
 if __name__ == "__main__":
