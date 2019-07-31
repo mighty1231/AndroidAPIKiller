@@ -1,7 +1,15 @@
-from androidkit import get_package_name, get_uid, get_pids, run_adb_cmd
-import re
 import os, sys
+import re
 import signal
+import time
+
+from androidkit import (
+    get_package_name,
+    get_uid,
+    get_pids,
+    run_adb_cmd,
+    AdbOfflineError
+)
 
 STATE_CONSTRUCTED = 0
 STATE_PREFIX_GIVEN = 1
@@ -140,27 +148,43 @@ def run_mtserver(package_name, output_folder, serial=None):
     global connections, log
     connections = Connections(package_name, serial, output_folder)
     uid = get_uid(package_name, serial=serial)
-    kill_mtserver(serial)
-    try:
-        print('Running mtserver...')
-        out = run_adb_cmd('shell /data/local/tmp/mtserver server {} {}'  \
-                .format(uid, package_name),
-            stdout_callback = _stdout_callback,
-            serial=serial)
-        print(out)
-    except WrongConnectionState:
-        print('Wrong state on connection! Check follow log...')
-        for line in log:
-            print(line)
 
+    while True:
         kill_mtserver(serial)
-    except Exception:
-        if connections.clean_up():
-            print('----- Start of the log -----')
-            for l in log:
-                print(l)
-            print('----- END of the log -----')
-        raise
+        try:
+            print('Running mtserver...')
+            out = run_adb_cmd('shell /data/local/tmp/mtserver server {} {}'  \
+                    .format(uid, package_name),
+                stdout_callback = _stdout_callback,
+                serial=serial,
+                retry_cnt=-1)
+            break
+
+        except WrongConnectionState:
+            print('Wrong state on connection! Check follow log...')
+            for line in log:
+                print(line)
+
+            kill_mtserver(serial)
+            break
+
+        except AdbOfflineError as e:
+            # retry due to offline error
+            print("run_mtserver: retry due to offline error...")
+
+            run_adb_cmd('kill-server', retry_cnt = -1)
+            run_adb_cmd('start-server', retry_cnt = -1)
+
+            time.sleep(1)
+            continue
+
+        except Exception:
+            if connections.clean_up():
+                print('----- Start of the log -----')
+                for l in log:
+                    print(l)
+                print('----- END of the log -----')
+            raise
 
 
 if __name__ == "__main__":
