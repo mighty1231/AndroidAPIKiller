@@ -3,6 +3,8 @@ from .avd import get_avd_list, create_avd
 from .emulator import emulator_run_and_wait, emulator_setup
 from .utils import (
     extract_apk,
+    list_packages,
+    clear_package,
     get_activity_stack,
     get_uid,
     get_pids,
@@ -47,6 +49,17 @@ extract_parser.add_argument('output_dir_or_file',
     help="Interpreted as file with '*.apk', otherwise interpreted as directory. " \
          "For latter case, file name is set to (package_name).apk")
 extract_parser.add_argument('--serial', default=None)
+
+listpackages_parser = subparsers.add_parser('listpackages',
+    help='List installed packages from device')
+listpackages_parser.add_argument('--all',
+    help='If checked, android packages are also shown.', action='store_true')
+listpackages_parser.add_argument('--serial', default=None)
+
+clearpackage_parser = subparsers.add_parser('clearpackage',
+    help='Clear application data of specific package from device')
+clearpackage_parser.add_argument('package')
+clearpackage_parser.add_argument('--serial', default=None)
 
 activity_stack_parser = subparsers.add_parser('activitystack',
     help='Print current activity stack on device')
@@ -107,6 +120,18 @@ elif args.func == 'extractapk':
     target = os.path.join(args.output_dir_or_file, '{}.apk'.format(args.package))
 
     extract_apk(args.package, target, serial = parse_serial(args.serial))
+elif args.func == 'listpackages':
+    packages = list_packages(serial = parse_serial(args.serial))
+    if args.all:
+        print('\n'.join(sorted(packages)))
+    else:
+        for p in sorted(packages):
+            if p.startswith('com.android.') or p.startswith('com.example.android') or \
+                    p == 'android':
+                continue
+            print(p)
+elif args.func == 'clearpackage':
+    clear_package(args.package, serial = parse_serial(args.serial))
 elif args.func == 'activitystack':
     stacks = get_activity_stack(serial = parse_serial(args.serial))
     for i, stack in enumerate(stacks):

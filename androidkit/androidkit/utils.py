@@ -435,6 +435,24 @@ def extract_apk(package_name, ofname, serial = None):
     run_adb_cmd('pull {} {}'.format(apk_path, ofname), serial=serial)
     print('Package {} is pulled into {}'.format(package_name, ofname))
 
+def list_packages(serial = None):
+    out = run_adb_cmd('shell pm list packages', serial=serial)
+    package_names = []
+    for line in out.split('\n'):
+        line = line.rstrip()
+        if line == '':
+            break
+        if line.startswith('package:'):
+            package_names.append(line[8:])
+        else:
+            raise RuntimeError('Unexpected line for pm list packages: {}\n'.format(line) + out)
+
+    return package_names
+
+def clear_package(package, serial = None):
+    out = run_adb_cmd('shell pm clear {}'.format(package), serial=serial)
+    print(out)
+
 def get_activity_stack(serial = None):
     # get_activity_stack returns list of list of activities
     # adb shell dumpsys activity activities | grep -i run
