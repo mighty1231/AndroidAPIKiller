@@ -89,7 +89,8 @@ def ape_task(avd_name, serial, package_name, output_dir, running_minutes):
 
     fetch_result(output_dir, serial)
 
-def run_ape_with_mt(apk_path, avd_name, libart_path, mtserver_path):
+def run_ape_with_mt(apk_path, avd_name, libart_path, mtserver_path,
+        ape_output_folder, mt_output_folder):
     package_name = get_package_name(apk_path)
     print('run_ape_with_mt(): given apk_path {} avd_name {}'.format(apk_path, avd_name))
 
@@ -102,9 +103,9 @@ def run_ape_with_mt(apk_path, avd_name, libart_path, mtserver_path):
     set_multiprocessing_mode()
 
     mtserver_proc = mp.Process(target=run_mtserver,
-        args=(package_name, "mt_output", avd.serial))
+        args=(package_name, mt_output_folder, avd.serial))
     apetask_proc = mp.Process(target=ape_task,
-        args=(avd_name, avd.serial, package_name, "ape_output", 1))
+        args=(avd_name, avd.serial, package_name, ape_output_folder, 30))
 
     mtserver_proc.start()
     apetask_proc.start()
@@ -114,6 +115,29 @@ def run_ape_with_mt(apk_path, avd_name, libart_path, mtserver_path):
     mtserver_proc.join()
 
 if __name__ == "__main__":
-    assert len(sys.argv) == 5
-    apk_path, avd_name, libart_path, mtserver_path = sys.argv[1:5]
-    run_ape_with_mt(apk_path, avd_name, libart_path, mtserver_path)
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Runner of APE with MiniTracing')
+    parser.add_argument('apk_list_file')
+    parser.add_argument('avd_name')
+    parser.add_argument('libart_path')
+    parser.add_argument('mtserver_path')
+    parser.add_argument('--ape_output_folder', default='{dirname}/ape_output')
+    parser.add_argument('--mt_output_folder', default='{dirname}/mt_output')
+
+    apk_files = []
+    args = parser.parse_args()
+    with open(args.apk_list_file, 'rt') as f:
+        for line in f:
+            if line == '' or line.startswith('//'):
+                continue
+            line = line.rstrip()
+            assert os.path.isfile(line), 'Parsing apk list: {} is not a file'.format(line)
+            apk_files.append(line)
+
+    for apk_path in apk_files:
+        dirname, filename = os.path.split(apk_path)
+        ape_output_folder = args.ape_output_folder.format(dirname=dirname, filename=filename)
+        mt_output_folder = args.mt_output_folder.format(dirname=dirname, filename=filename)
+        run_ape_with_mt(apk_path, args.avd_name, args.libart_path, args.mtserver_path,
+                ape_output_folder, mt_output_folder)
