@@ -9,9 +9,10 @@ from androidkit import (
     AdbOfflineError
 )
 
-STATE_CONSTRUCTED = 0
-STATE_PREFIX_GIVEN = 1
-states = [STATE_CONSTRUCTED, STATE_PREFIX_GIVEN]
+STATE_START_CONSTRUCTED = 0
+STATE_START_PREFIX_GIVEN = 1
+STATE_STOP_CONSTRUCTED = 2
+states = [STATE_START_CONSTRUCTED, STATE_START_PREFIX_GIVEN]
 
 class WrongConnectionState(Exception):
     pass
@@ -50,11 +51,10 @@ class Connections:
             remaining_procs.append((running_pid, prefix))
         self.started_processes = remaining_procs
 
-
-    def new_connection(self, socketfd, pid):
+    def new_start_connection(self, socketfd, pid):
         if socketfd in self.connections:
             raise WrongConnectionState
-        self.connections[socketfd] = (STATE_CONSTRUCTED, pid)
+        self.connections[socketfd] = (STATE_START_CONSTRUCTED, pid)
         self._check_processes()
 
     def give_prefix(self, socketfd, prefix):
@@ -62,23 +62,49 @@ class Connections:
             raise WrongConnectionState
         state, pid = self.connections[socketfd]
 
-        if state != STATE_CONSTRUCTED:
+        if state != STATE_START_CONSTRUCTED:
             raise WrongConnectionState
-        self.connections[socketfd] = (STATE_PREFIX_GIVEN, (pid, prefix))
+        self.connections[socketfd] = (STATE_START_PREFIX_GIVEN, (pid, prefix))
         print('New Connection! pid', pid, 'prefix', prefix)
+
+    def new_stop_connection(self, socketfd, pid):
+        # This part could be called with gentle termination of the app (not SIGKILL)
+        if socketfd in self.connections:
+            raise WrongConnectionState
+        self.connections[socketfd] = (STATE_STOP_CONSTRUCTED, pid)
+
+    def release_file(self, socketfd, fname):
+        # This part could be called with gentle termination of the app (not SIGKILL)
+        if socketfd not in self.connections:
+            raise WrongConnectionState
+        state, pid = self.connections[socketfd]
+
+        if state != STATE_STOP_CONSTRUCTED:
+            raise WrongConnectionState
+
+        print("Releasing file {}".format(fname))
+        run_adb_cmd("pull {} {}".format(fname, self.output_folder),
+                serial=self.serial)
+        run_adb_cmd("shell rm {}".format(fname),
+                serial=self.serial)
 
     def close_connection(self, socketfd):
         if socketfd not in self.connections:
             raise WrongConnectionState
 
-        state, (pid, prefix) = self.connections[socketfd]
-        if state != STATE_PREFIX_GIVEN:
+        state, data = self.connections[socketfd]
+        if state == STATE_START_PREFIX_GIVEN:
+            pid, prefix = data
+            self.started_processes.append((pid, prefix))
+            del self.connections[socketfd]
+        elif state == STATE_STOP_CONSTRUCTED:
+            # This part could be called with gentle termination of the app (not SIGKILL)
+            # Files from process with target pid are already pulled.
+            targetpid = data
+            self.started_process = [(pid, prefix) for pid, prefix in self.started_process if pid != targetpid]
+            del self.connections[socketfd]
+        else:
             raise WrongConnectionState
-        self.started_processes.append((pid, prefix))
-        del self.connections[socketfd]
-
-        print('Running processes: ', self.started_processes)
-        print('Connection State: ', self.connections)
 
     def clean_up(self):
         if self._clean_up:
@@ -90,7 +116,7 @@ class Connections:
         self._check_processes()
 
         if self.started_processes != []:
-            print("Immediately killed processes without any invocation for MiniTrace::FlushBuffer()")
+            print("Immediately killed processes without any traced data")
             for running_pid, prefix in self.started_processes:
                 print(" - pid {} with prefix {}".format(running_pid, prefix))
         kill_mtserver(self.serial)
@@ -114,13 +140,27 @@ def _stdout_callback(line):
         line)
     if match is not None:
         socketfd, pid = match.groups()
-        connections.new_connection(int(socketfd), int(pid))
+        connections.new_start_connection(int(socketfd), int(pid))
         return
 
     match = re.match(r'\[Socket ([0-9]+)\] Selected prefix: (.*)', line)
     if match is not None:
         socketfd, prefix = match.groups()
         connections.give_prefix(int(socketfd), prefix)
+        return
+
+    match = re.match(r'\[Socket ([0-9]+)\] Connection with pid ([0-9]+) from Stop\(\)',
+        line)
+    if match is not None:
+        socketfd, pid = match.groups()
+        connections.new_stop_connection(int(socketfd), int(pid))
+        return
+
+    match = re.match(r'\[Socket ([0-9]+)\] File released: (.*)',
+        line)
+    if match is not None:
+        socketfd, fname = match.groups()
+        connections.release_file(int(socketfd), fname)
         return
 
     match = re.match(r'\[Socket ([0-9]+)\] Connection closed', line)
