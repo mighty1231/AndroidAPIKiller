@@ -16,7 +16,8 @@ from androidkit import (
 
 import time
 import multiprocessing as mp
-from mt_run import run_mtserver, kill_mtserver
+from multiprocessing.sharedctypes import Value
+from mt_run import Connections, kill_mtserver, WrongConnectionState
 from ape_runner import fetch_result
 
 ART_APE_MT_READY_SS = "ART_APE_MT" # snapshot name
@@ -45,7 +46,7 @@ def install_art_ape_mt(avd_name, libart_path, mtserver_path, force_clear = False
         serial = emulator_run_and_wait(avd_name, snapshot = ART_APE_MT_READY_SS, writable_system = True)
 
     if force_clear or ART_APE_MT_READY_SS not in list_snapshots(serial = serial):
-        print("No saved snapshot on the device, rebooting and making snapshot...")
+        Parsingt("No saved snapshot on the device, rebooting and making snapshot...")
         kill_emulator(serial = serial)
         time.sleep(3)
         serial = emulator_run_and_wait(avd_name, wipe_data = True, writable_system = True)
@@ -76,7 +77,48 @@ def install_art_ape_mt(avd_name, libart_path, mtserver_path, force_clear = False
     avd.setRunning(serial)
     return avd
 
-def ape_task(avd_name, serial, package_name, output_dir, running_minutes):
+class ConnectionsWithValue(Connections):
+    def __init__(self, *args):
+        value = args[-1]
+        self._value = args[-1]
+        super(ConnectionsWithValue, self).__init__(*(args[:-1]))
+
+    def stdout_callback(self, line):
+        if line.startswith('Server with uid'):
+            self._value.value += 1
+        super(ConnectionsWithValue, self).stdout_callback(line)
+
+def mt_task(package_name, output_folder, serial, mt_is_running):
+    connections = ConnectionsWithValue(package_name, serial, output_folder, mt_is_running)
+
+    while True:
+        kill_mtserver(serial)
+        try:
+            print('Running mtserver...')
+            out = run_adb_cmd('shell /data/local/tmp/mtserver server {}'  \
+                    .format(package_name),
+                stdout_callback = connections.stdout_callback,
+                serial=serial)
+            break
+        except WrongConnectionState:
+            print('Wrong state on connection! Check follow log...')
+            for line in connections.log:
+                print(line)
+
+            kill_mtserver(serial)
+            break
+        except KeyboardInterrupt:
+            connections.clean_up()
+            raise
+        except Exception:
+            connections.clean_up()
+            raise
+    connections.clean_up()
+
+
+def ape_task(avd_name, serial, package_name, output_dir, running_minutes, mt_is_running):
+    while mt_is_running.value == 0:
+        pass
     print('ape_task(): Emulator[{}, {}] Running APE with package {}'.format(avd_name, serial, package_name))
     args = '-p {} --running-minutes {} --ape sata --bugreport'.format(package_name, running_minutes)
     ret = run_adb_cmd('shell CLASSPATH={} {} {} {} {}'.format(
@@ -102,10 +144,11 @@ def run_ape_with_mt(apk_path, avd_name, libart_path, mtserver_path,
     run_adb_cmd('install {}'.format(apk_path))
     set_multiprocessing_mode()
 
-    mtserver_proc = mp.Process(target=run_mtserver,
-        args=(package_name, mt_output_folder, avd.serial))
+    mt_is_running = Value('i', 0)
+    mtserver_proc = mp.Process(target=mt_task,
+        args=(package_name, mt_output_folder, avd.serial, mt_is_running))
     apetask_proc = mp.Process(target=ape_task,
-        args=(avd_name, avd.serial, package_name, ape_output_folder, 30))
+        args=(avd_name, avd.serial, package_name, ape_output_folder, 30, mt_is_running))
 
     mtserver_proc.start()
     apetask_proc.start()

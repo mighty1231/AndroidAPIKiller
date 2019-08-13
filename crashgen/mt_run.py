@@ -12,19 +12,22 @@ from androidkit import (
 STATE_START_CONSTRUCTED = 0
 STATE_START_PREFIX_GIVEN = 1
 STATE_STOP_CONSTRUCTED = 2
-states = [STATE_START_CONSTRUCTED, STATE_START_PREFIX_GIVEN]
 
 class WrongConnectionState(Exception):
     pass
 
 class Connections:
     def __init__(self, package_name, serial, output_folder):
+        if not os.path.isdir(output_folder):
+            os.makedirs(output_folder)
+
         self.package_name = package_name
         self.serial = serial
         self.output_folder = output_folder
         self.started_processes = []
         self.connections = {}
         self._clean_up = False
+        self.log = []
 
     def _check_processes(self):
         # Check processes are alive or not
@@ -101,7 +104,7 @@ class Connections:
             # This part could be called with gentle termination of the app (not SIGKILL)
             # Files from process with target pid are already pulled.
             targetpid = data
-            self.started_process = [(pid, prefix) for pid, prefix in self.started_process if pid != targetpid]
+            self.started_processes = [(pid, prefix) for pid, prefix in self.started_processes if pid != targetpid]
             del self.connections[socketfd]
         else:
             raise WrongConnectionState
@@ -120,56 +123,55 @@ class Connections:
             for running_pid, prefix in self.started_processes:
                 print(" - pid {} with prefix {}".format(running_pid, prefix))
         kill_mtserver(self.serial)
+        print('----- Start of the log -----')
+        for l in self.log:
+            print(l)
+        print('----- END of the log -----')
         return True
 
-connections = None
-log = []
-def _stdout_callback(line):
-    global log
-    log.append(line)
-    if line.startswith('Server with uid'):
-        print("mtserver: server is running")
-        return
-    if 'Connection attempt!' in line:
-        print("mtserver: connection attempt!")
-        return
+    def stdout_callback(self, line):
+        self.log.append(line)
+        if line.startswith('Server with uid'):
+            print("mtserver: server is running")
+            return
+        if 'Connection attempt!' in line:
+            print("mtserver: connection attempt!")
+            return
 
-    global connections
+        match = re.match(r'\[Socket ([0-9]+)\] Connection with pid ([0-9]+) from Start\(\)',
+            line)
+        if match is not None:
+            socketfd, pid = match.groups()
+            self.new_start_connection(int(socketfd), int(pid))
+            return
 
-    match = re.match(r'\[Socket ([0-9]+)\] Connection with pid ([0-9]+) from Start\(\)',
-        line)
-    if match is not None:
-        socketfd, pid = match.groups()
-        connections.new_start_connection(int(socketfd), int(pid))
-        return
+        match = re.match(r'\[Socket ([0-9]+)\] Selected prefix: (.*)', line)
+        if match is not None:
+            socketfd, prefix = match.groups()
+            self.give_prefix(int(socketfd), prefix)
+            return
 
-    match = re.match(r'\[Socket ([0-9]+)\] Selected prefix: (.*)', line)
-    if match is not None:
-        socketfd, prefix = match.groups()
-        connections.give_prefix(int(socketfd), prefix)
-        return
+        match = re.match(r'\[Socket ([0-9]+)\] Connection with pid ([0-9]+) from Stop\(\)',
+            line)
+        if match is not None:
+            socketfd, pid = match.groups()
+            self.new_stop_connection(int(socketfd), int(pid))
+            return
 
-    match = re.match(r'\[Socket ([0-9]+)\] Connection with pid ([0-9]+) from Stop\(\)',
-        line)
-    if match is not None:
-        socketfd, pid = match.groups()
-        connections.new_stop_connection(int(socketfd), int(pid))
-        return
+        match = re.match(r'\[Socket ([0-9]+)\] File released: (.*)',
+            line)
+        if match is not None:
+            socketfd, fname = match.groups()
+            self.release_file(int(socketfd), fname)
+            return
 
-    match = re.match(r'\[Socket ([0-9]+)\] File released: (.*)',
-        line)
-    if match is not None:
-        socketfd, fname = match.groups()
-        connections.release_file(int(socketfd), fname)
-        return
+        match = re.match(r'\[Socket ([0-9]+)\] Connection closed', line)
+        if match is not None:
+            socketfd = match.group(1)
+            self.close_connection(int(socketfd))
+            return
 
-    match = re.match(r'\[Socket ([0-9]+)\] Connection closed', line)
-    if match is not None:
-        socketfd = match.group(1)
-        connections.close_connection(int(socketfd))
-        return
-
-    print("Warning: Unexpected line", line)
+        print("Warning: Unexpected line", line)
 
 def kill_mtserver(serial = None):
     pids = get_pids('/data/local/tmp/mtserver', serial=serial)
@@ -177,10 +179,6 @@ def kill_mtserver(serial = None):
         run_adb_cmd('shell kill {}'.format(pid), serial=serial)
 
 def run_mtserver(package_name, output_folder, serial=None):
-    if not os.path.isdir(output_folder):
-        os.makedirs(output_folder)
-
-    global connections, log
     connections = Connections(package_name, serial, output_folder)
 
     while True:
@@ -189,52 +187,24 @@ def run_mtserver(package_name, output_folder, serial=None):
             print('Running mtserver...')
             out = run_adb_cmd('shell /data/local/tmp/mtserver server {}'  \
                     .format(package_name),
-                stdout_callback = _stdout_callback,
-                serial=serial,
-                retry_cnt=-1)
+                stdout_callback = connections.stdout_callback,
+                serial=serial)
             break
-
         except WrongConnectionState:
             print('Wrong state on connection! Check follow log...')
-            for line in log:
+            for line in connections.log:
                 print(line)
 
             kill_mtserver(serial)
             break
-
-        except AdbOfflineError as e:
-            # retry due to offline error
-            print("run_mtserver: retry due to offline error...")
-
-            # Those should not be called with serial
-            run_adb_cmd('kill-server', retry_cnt = -1)
-            run_adb_cmd('start-server', retry_cnt = -1)
-
-            time.sleep(1)
-            continue
-
         except KeyboardInterrupt:
-            if connections.clean_up():
-                print('----- Start of the log -----')
-                for l in log:
-                    print(l)
-                print('----- END of the log -----')
+            connections.clean_up()
             raise
-
         except Exception:
-            if connections.clean_up():
-                print('----- Start of the log -----')
-                for l in log:
-                    print(l)
-                print('----- END of the log -----')
+            connections.clean_up()
             raise
 
-    if connections.clean_up():
-        print('----- Start of the log -----')
-        for l in log:
-            print(l)
-        print('----- END of the log -----')
-
+    connections.clean_up()
 
 if __name__ == "__main__":
     run_mtserver('com.hoi.simpleapp22', 'temp')
