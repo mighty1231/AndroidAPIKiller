@@ -32,7 +32,7 @@ def libart_check(libart_path, serial):
 
     return size1 == size2
 
-def install_art_ape_mt(avd_name, libart_path, mtserver_path, force_clear = False):
+def install_art_ape_mt(avd_name, libart_path, ape_jar_path, mtserver_path, force_clear = False):
     avd_list = get_avd_list()
     avd = next(avd for avd in avd_list if avd.name == avd_name)
 
@@ -67,7 +67,7 @@ def install_art_ape_mt(avd_name, libart_path, mtserver_path, force_clear = False
         emulator_setup(serial = serial)
 
         print("Installing ape.jar")
-        run_adb_cmd("push ape.jar {}".format(TMP_LOCATION), serial=serial)
+        run_adb_cmd("push {} {}".format(ape_jar_path, os.path.join(TMP_LOCATION, "ape.jar")), serial=serial)
 
         print("Installing minitrace")
         run_adb_cmd("push {} {}".format(mtserver_path, TMP_LOCATION), serial=serial)
@@ -134,7 +134,7 @@ def ape_task(avd_name, serial, package_name, output_dir, running_minutes, mt_is_
 
     fetch_result(output_dir, serial)
 
-def run_ape_with_mt(apk_path, avd_name, libart_path, mtserver_path,
+def run_ape_with_mt(apk_path, avd_name, libart_path, ape_jar_path, mtserver_path,
         ape_output_folder, mt_output_folder, running_minutes):
     package_name = get_package_name(apk_path)
     print('run_ape_with_mt(): given apk_path {} avd_name {}'.format(apk_path, avd_name))
@@ -142,7 +142,7 @@ def run_ape_with_mt(apk_path, avd_name, libart_path, mtserver_path,
     assert os.path.split(libart_path)[1] == 'libart.so'
     assert os.path.split(mtserver_path)[1] == 'mtserver'
 
-    avd = install_art_ape_mt(avd_name, libart_path, mtserver_path)
+    avd = install_art_ape_mt(avd_name, libart_path, ape_jar_path, mtserver_path)
 
     run_adb_cmd('install {}'.format(apk_path))
     set_multiprocessing_mode()
@@ -167,6 +167,7 @@ if __name__ == "__main__":
     parser.add_argument('apk_list_file')
     parser.add_argument('avd_name')
     parser.add_argument('libart_path')
+    parser.add_argument('ape_jar_path')
     parser.add_argument('mtserver_path')
     parser.add_argument('--running_minutes', default='20')
     parser.add_argument('--ape_output_folder', default='{dirname}/ape_output')
@@ -186,5 +187,5 @@ if __name__ == "__main__":
         dirname, filename = os.path.split(apk_path)
         ape_output_folder = args.ape_output_folder.format(dirname=dirname, filename=filename)
         mt_output_folder = args.mt_output_folder.format(dirname=dirname, filename=filename)
-        run_ape_with_mt(apk_path, args.avd_name, args.libart_path, args.mtserver_path,
+        run_ape_with_mt(apk_path, args.avd_name, args.libart_path, args.ape_jar_path, args.mtserver_path,
                 ape_output_folder, mt_output_folder, args.running_minutes)
