@@ -6,7 +6,8 @@ from androidkit import (
     get_package_name,
     get_pids,
     run_adb_cmd,
-    AdbOfflineError
+    AdbOfflineError,
+    unset_multiprocessing_mode
 )
 
 STATE_START_CONSTRUCTED = 0
@@ -112,6 +113,7 @@ class Connections:
     def clean_up(self):
         if self._clean_up:
             return False
+        unset_multiprocessing_mode()
         self._clean_up = True
         print('Deleting connections...')
         for running_pid, prefix in self.started_processes:

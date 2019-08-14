@@ -8,6 +8,7 @@ from .utils import (
     save_snapshot,
     load_snapshot,
     set_multiprocessing_mode,
+    unset_multiprocessing_mode,
     extract_apk,
     list_packages,
     clear_package,
