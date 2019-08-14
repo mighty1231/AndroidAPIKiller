@@ -187,6 +187,9 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None, retry_cnt=2,
                             time.sleep(0.2)
                         raise AdbOfflineErrorBreak(cmd, out, err)
                     raise RunCmdError(cmd, out, err)
+                if stdout_callback is not None:
+                    for line in out.split('\n'):
+                        stdout_callback(line)
                 return out
 
         if mpdelay.status == 'longproc':
@@ -363,6 +366,9 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None, retry_cnt=2,
                     else:
                         raise AdbOfflineError(cmd, out, err)
                 raise RunCmdError(cmd, out, err)
+            if stdout_callback is not None:
+                for line in out.split('\n'):
+                    stdout_callback(line)
             return out
 
 def run_cmd(cmd, cwd=None, env=None):
