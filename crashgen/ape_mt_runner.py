@@ -86,6 +86,8 @@ class ConnectionsWithValue(Connections):
     def stdout_callback(self, line):
         if line.startswith('Server with uid'):
             self._value.value += 1
+        import datetime
+        print(datetime.datetime.now().strftime('%m-%d %H:%M:%S') + ' : ' + line)
         super(ConnectionsWithValue, self).stdout_callback(line)
 
 def mt_task(package_name, output_folder, serial, mt_is_running):
@@ -119,6 +121,7 @@ def mt_task(package_name, output_folder, serial, mt_is_running):
 def ape_task(avd_name, serial, package_name, output_dir, running_minutes, mt_is_running):
     while mt_is_running.value == 0:
         pass
+    print('mt is running?', mt_is_running)
     print('ape_task(): Emulator[{}, {}] Running APE with package {}'.format(avd_name, serial, package_name))
     args = '-p {} --running-minutes {} --ape sata'.format(package_name, running_minutes)
     ret = run_adb_cmd('shell CLASSPATH={} {} {} {} {}'.format(
@@ -132,7 +135,7 @@ def ape_task(avd_name, serial, package_name, output_dir, running_minutes, mt_is_
     fetch_result(output_dir, serial)
 
 def run_ape_with_mt(apk_path, avd_name, libart_path, mtserver_path,
-        ape_output_folder, mt_output_folder):
+        ape_output_folder, mt_output_folder, running_minutes):
     package_name = get_package_name(apk_path)
     print('run_ape_with_mt(): given apk_path {} avd_name {}'.format(apk_path, avd_name))
 
@@ -148,7 +151,7 @@ def run_ape_with_mt(apk_path, avd_name, libart_path, mtserver_path,
     mtserver_proc = mp.Process(target=mt_task,
         args=(package_name, mt_output_folder, avd.serial, mt_is_running))
     apetask_proc = mp.Process(target=ape_task,
-        args=(avd_name, avd.serial, package_name, ape_output_folder, 20, mt_is_running))
+        args=(avd_name, avd.serial, package_name, ape_output_folder, running_minutes, mt_is_running))
 
     mtserver_proc.start()
     apetask_proc.start()
@@ -165,6 +168,7 @@ if __name__ == "__main__":
     parser.add_argument('avd_name')
     parser.add_argument('libart_path')
     parser.add_argument('mtserver_path')
+    parser.add_argument('--running_minutes', default='20')
     parser.add_argument('--ape_output_folder', default='{dirname}/ape_output')
     parser.add_argument('--mt_output_folder', default='{dirname}/mt_output')
 
@@ -183,4 +187,4 @@ if __name__ == "__main__":
         ape_output_folder = args.ape_output_folder.format(dirname=dirname, filename=filename)
         mt_output_folder = args.mt_output_folder.format(dirname=dirname, filename=filename)
         run_ape_with_mt(apk_path, args.avd_name, args.libart_path, args.mtserver_path,
-                ape_output_folder, mt_output_folder)
+                ape_output_folder, mt_output_folder, args.running_minutes)
