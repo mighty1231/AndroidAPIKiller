@@ -92,15 +92,15 @@ class ConnectionsWithValue(Connections):
         print(datetime.datetime.now().strftime('%m-%d %H:%M:%S') + ' : ' + line)
         super(ConnectionsWithValue, self).stdout_callback(line)
 
-def mt_task(package_name, output_folder, serial, mt_is_running):
+def mt_task(package_name, output_folder, serial, logging_flag, mt_is_running):
     connections = ConnectionsWithValue(package_name, serial, output_folder, mt_is_running)
 
     while True:
         kill_mtserver(serial)
         try:
             print('Running mtserver...')
-            out = run_adb_cmd('shell /data/local/tmp/mtserver server {}'  \
-                    .format(package_name),
+            out = run_adb_cmd('shell /data/local/tmp/mtserver server {} {}'  \
+                    .format(package_name, logging_flag),
                 stdout_callback = connections.stdout_callback,
                 serial=serial)
             break
@@ -151,7 +151,7 @@ def run_ape_with_mt(apk_path, avd_name, libart_path, ape_jar_path, mtserver_path
 
     mt_is_running = Value('i', 0)
     mtserver_proc = mp.Process(target=mt_task,
-        args=(package_name, mt_output_folder, avd.serial, mt_is_running))
+        args=(package_name, mt_output_folder, avd.serial, "43", mt_is_running))
     apetask_proc = mp.Process(target=ape_task,
         args=(avd_name, avd.serial, package_name, ape_output_folder, running_minutes, mt_is_running))
 
