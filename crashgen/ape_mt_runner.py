@@ -43,13 +43,15 @@ def install_art_ape_mt(avd_name, libart_path, ape_jar_path, mtserver_path, force
             return avd
         serial = avd.serial
     else:
-        serial = emulator_run_and_wait(avd_name, snapshot = ART_APE_MT_READY_SS, writable_system = True)
+        serial = emulator_run_and_wait(avd_name, snapshot = ART_APE_MT_READY_SS,
+                writable_system = True, partition_size_in_mb=20480)
 
     if force_clear or ART_APE_MT_READY_SS not in list_snapshots(serial = serial):
-        Parsingt("No saved snapshot on the device, rebooting and making snapshot...")
+        print("No saved snapshot on the device, rebooting and making snapshot...")
         kill_emulator(serial = serial)
         time.sleep(3)
-        serial = emulator_run_and_wait(avd_name, wipe_data = True, writable_system = True)
+        serial = emulator_run_and_wait(avd_name, wipe_data = True,
+                writable_system = True, partition_size_in_mb=20480)
 
         print("Installing libart.so")
         run_adb_cmd("remount", serial=serial)
@@ -121,7 +123,7 @@ def mt_task(package_name, output_folder, serial, mt_is_running):
 def ape_task(avd_name, serial, package_name, output_dir, running_minutes, mt_is_running):
     while mt_is_running.value == 0:
         pass
-    print('mt is running?', mt_is_running)
+    print('mt is running = ', mt_is_running.value)
     print('ape_task(): Emulator[{}, {}] Running APE with package {}'.format(avd_name, serial, package_name))
     args = '-p {} --running-minutes {} --ape sata'.format(package_name, running_minutes)
     ret = run_adb_cmd('shell CLASSPATH={} {} {} {} {}'.format(

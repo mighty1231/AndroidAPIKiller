@@ -38,7 +38,7 @@ class Connections:
         remaining_procs = []
         for running_pid, prefix in self.started_processes:
             if running_pid not in pids:
-                print("Process Termination, pid", running_pid)
+                print("Process with pid {} is terminated".format(running_pid))
                 out = run_adb_cmd('shell ls {}*'.format(prefix),
                         serial=self.serial)
                 if "No such file or directory" not in out:

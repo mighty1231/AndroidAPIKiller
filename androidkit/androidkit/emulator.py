@@ -33,7 +33,7 @@ def emulator_wait_for_boot(avd_name, r_fd=None, serial=None):
         time.sleep(5)
     return True
 
-def emulator_run_and_wait(avd_name, serial=None, snapshot=None, wipe_data=False, writable_system=False):
+def emulator_run_and_wait(avd_name, serial=None, snapshot=None, wipe_data=False, writable_system=False, partition_size_in_mb=None):
     # check avd
     avd_list = get_avd_list()
     if any(a.running and a.name == avd_name for a in avd_list):
@@ -84,6 +84,12 @@ def emulator_run_and_wait(avd_name, serial=None, snapshot=None, wipe_data=False,
         # This option is used when modification on /system is needed.
         # It could be used for modifying /system/lib/libart.so, as MiniTracing does
         emulator_cmd.append('-writable-system')
+
+    if partition_size_in_mb:
+        assert type(partition_size_in_mb) == int or \
+                (type(partition_size_in_mb) == str and all(ord('0') <= ord(ch) <= ord('9') for ch in partition_size_in_mb)), \
+                'partition_size_in_mb should be integer, given {}'.format(partition_size_in_mb)
+        emulator_cmd.append('-partition-size {}'.format(partition_size_in_mb))
 
     proc = subprocess.Popen(' '.join(emulator_cmd), stdout=w_fd, stderr=w_fd, shell=True,
         cwd = os.path.join(getConfig()['SDK_PATH'], 'tools'))

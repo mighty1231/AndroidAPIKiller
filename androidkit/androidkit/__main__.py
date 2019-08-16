@@ -27,6 +27,7 @@ run_parser.add_argument('--port', default=None)
 run_parser.add_argument('--snapshot', default=None)
 run_parser.add_argument('--wipe_data', action='store_true')
 run_parser.add_argument('--writable_system', action='store_true')
+run_parser.add_argument('--partition_size', help='Disk size for emulator in MB', default=None)
 
 arbi_parser = subparsers.add_parser('exec')
 arbi_parser.add_argument('expression', type=str)
@@ -100,7 +101,8 @@ elif args.func == 'run':
         serial=port,
         snapshot=args.snapshot,
         wipe_data=args.wipe_data,
-        writable_system=args.writable_system
+        writable_system=args.writable_system,
+        partition_size_in_mb=args.partition_size
     )
 elif args.func == 'exec':
     print('Executing {}...'.format(args.expression))
