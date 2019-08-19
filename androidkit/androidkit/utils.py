@@ -129,23 +129,19 @@ class CacheDecorator:
 
             return value
 
-def _put_serial(serial):
-
-    if serial is None:
-        return ''
-    elif type(serial) == int:
-        return ' -s emulator-{} '.format(serial)
-    elif type(serial) == str:
-        return ' -s "{}" '.format(serial)
-    else:
-        raise ValueError("Serial must be integer or string: {}".format(serial))
-
 def run_adb_cmd(orig_cmd, serial=None, timeout=None, retry_cnt=2,
         stdout_callback = None, stderr_callback = None):
     # timeout should be string, for example '2s'
     # adb_binary = os.path.join(getConfig()['SDK_PATH'], 'platform-tools/adb')
     adb_binary = 'adb'
-    cmd = '{} {} {}'.format(adb_binary, _put_serial(serial), orig_cmd)
+    if serial is None:
+        cmd = '{} {}'.format(adb_binary, orig_cmd)
+    elif type(serial) == int:
+        cmd = '{} -s emulator-{} {}'.format(adb_binary, serial, orig_cmd)
+    elif type(serial) == str:
+        cmd = '{} -s "{}" {}'.format(adb_binary, serial, orig_cmd)
+    else:
+        raise ValueError("Serial must be integer or string: {}".format(serial))
     if timeout is not None:
         cmd = 'timeout {} {}'.format(timeout, cmd)
 
