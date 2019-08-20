@@ -20,6 +20,7 @@ import multiprocessing as mp
 from multiprocessing.sharedctypes import Value
 from mt_run import Connections, kill_mtserver, WrongConnectionState, STATE_STOP_CONSTRUCTED
 from ape_runner import fetch_result
+import time
 
 # compress files with thread
 from consumer import collapse
@@ -44,6 +45,7 @@ def install_art_ape_mt(avd_name, libart_path, ape_jar_path, mtserver_path, force
     if avd.running:
         if not force_clear and ART_APE_MT_READY_SS in list_snapshots(serial = avd.serial):
             load_snapshot(ART_APE_MT_READY_SS, serial = avd.serial)
+            time.sleep(1)
             assert libart_check(libart_path, serial = avd.serial)
             return avd
         serial = avd.serial

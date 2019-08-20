@@ -139,7 +139,7 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None, retry_cnt=2,
     elif type(serial) == int:
         cmd = '{} -s emulator-{} {}'.format(adb_binary, serial, orig_cmd)
     elif type(serial) == str:
-        cmd = '{} -s "{}" {}'.format(adb_binary, serial, orig_cmd)
+        cmd = '{} -s {} {}'.format(adb_binary, serial, orig_cmd)
     else:
         raise ValueError("Serial must be integer or string: {}".format(serial))
     if timeout is not None:
