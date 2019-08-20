@@ -11,14 +11,19 @@ from androidkit import (
     kill_emulator,
     emulator_run_and_wait,
     emulator_setup,
-    emulator_wait_for_boot
+    emulator_wait_for_boot,
+    install_package
 )
 
 import time
 import multiprocessing as mp
 from multiprocessing.sharedctypes import Value
-from mt_run import Connections, kill_mtserver, WrongConnectionState
+from mt_run import Connections, kill_mtserver, WrongConnectionState, STATE_STOP_CONSTRUCTED
 from ape_runner import fetch_result
+
+# compress files with thread
+from consumer import collapse
+import threading
 
 ART_APE_MT_READY_SS = "ART_APE_MT" # snapshot name
 TMP_LOCATION = "/data/local/tmp"
@@ -83,6 +88,7 @@ class ConnectionsWithValue(Connections):
     def __init__(self, *args):
         value = args[-1]
         self._value = args[-1]
+        self._threads = []
         super(ConnectionsWithValue, self).__init__(*(args[:-1]))
 
     def stdout_callback(self, line):
@@ -91,6 +97,35 @@ class ConnectionsWithValue(Connections):
         import datetime
         print(datetime.datetime.now().strftime('%m-%d %H:%M:%S') + ' : ' + line)
         super(ConnectionsWithValue, self).stdout_callback(line)
+
+    def _check_processes(self):
+        pulled_prefixes = super(ConnectionsWithValue, self)._check_processes()
+        for prefix in pulled_prefixes:
+            prefix_dirname, prefix_filename = os.path.split(prefix)
+            thread = threading.Thread(target=collapse, args=(os.path.join(self.output_folder, prefix_filename), ))
+            thread.start()
+            self._threads.append(thread)
+
+    def close_connection(self, socketfd):
+        # find prefix for open connections
+        if socketfd not in self.connections:
+            raise WrongConnectionState
+
+        state, data = self.connections[socketfd]
+        if state == STATE_STOP_CONSTRUCTED:
+            targetpid = data
+            prefix = next(prefix for pid, prefix in self.started_processes if pid == targetpid)
+            prefix_dirname, prefix_filename = os.path.split(prefix)
+            thread = threading.Thread(target=collapse, args=(os.path.join(self.output_folder, prefix_filename), ))
+            thread.start()
+            self._threads.append(thread)
+        super(ConnectionsWithValue, self).close_connection(socketfd)
+
+    def clean_up(self):
+        print('Waiting for collapsing threads')
+        if super(ConnectionsWithValue, self).clean_up():
+            for thread in self._threads:
+                thread.join()
 
 def mt_task(package_name, output_folder, serial, logging_flag, mt_is_running):
     connections = ConnectionsWithValue(package_name, serial, output_folder, mt_is_running)
@@ -141,17 +176,21 @@ def run_ape_with_mt(apk_path, avd_name, libart_path, ape_jar_path, mtserver_path
     package_name = get_package_name(apk_path)
     print('run_ape_with_mt(): given apk_path {} avd_name {}'.format(apk_path, avd_name))
 
-    assert os.path.split(libart_path)[1] == 'libart.so'
+    assert os.path.split(libart_path)[1] in ['libart.so', 'libart_api.so']
     assert os.path.split(mtserver_path)[1] == 'mtserver'
 
     avd = install_art_ape_mt(avd_name, libart_path, ape_jar_path, mtserver_path)
 
-    run_adb_cmd('install {}'.format(apk_path))
+    try:
+        install_package(apk_path, serial=avd.serial)
+    except RuntimeError as e:
+        print(e)
+        return
     set_multiprocessing_mode()
 
     mt_is_running = Value('i', 0)
     mtserver_proc = mp.Process(target=mt_task,
-        args=(package_name, mt_output_folder, avd.serial, "43", mt_is_running))
+        args=(package_name, mt_output_folder, avd.serial, "1", mt_is_running))
     apetask_proc = mp.Process(target=ape_task,
         args=(avd_name, avd.serial, package_name, ape_output_folder, running_minutes, mt_is_running))
 

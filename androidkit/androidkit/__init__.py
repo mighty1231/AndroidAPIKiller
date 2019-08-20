@@ -14,7 +14,8 @@ from .utils import (
     clear_package,
     get_activity_stack,
     get_uid,
-    get_pids
+    get_pids,
+    install_package
 )
 from .config import getConfig
 from .avd import get_avd_list, create_avd

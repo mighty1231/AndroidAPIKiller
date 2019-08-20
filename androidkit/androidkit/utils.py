@@ -549,3 +549,27 @@ def get_pids(package_name, serial=None):
             pids.append(int(tokens[1]))
 
     return pids
+
+def install_package(apk_path, serial=None):
+    res = run_adb_cmd('install {}'.format(apk_path), serial=serial)
+
+    '''
+    Example for success
+        Performing Push Install
+        Atarashii-225beta.apk: 1 file pushed. 271.3 MB/s (3652770 bytes in 0.013s)
+            pkg: /data/local/tmp/Atarashii-225beta.apk
+        Success
+
+    Example for failure
+        Performing Push Install
+        cSploit-release.apk: 1 file pushed. 257.6 MB/s (3669768 bytes in 0.014s)
+            pkg: /data/local/tmp/cSploit-release.apk
+        Failure [INSTALL_FAILED_NO_MATCHING_ABIS]
+
+    '''
+    last_line = res.rstrip().split('\n')[-1]
+    if 'Failure' in last_line:
+        raise RuntimeError('Install package {} - {}'.format(apk_path, last_line))
+    else:
+        # Success
+        assert 'Success' in last_line

@@ -45,7 +45,11 @@ def run_ape(apk_path, avd_name, output_dir, running_minutes=1):
     package_name = get_package_name(apk_path)
     print('run_ape(): given apk_path {} avd_name {}'.format(apk_path, avd_name))
     avd = install_ape_and_make_snapshot(avd_name)
-    run_adb_cmd('install {}'.format(apk_path), serial=avd.serial)
+    try:
+        install_package(apk_path, serial=avd.serial)
+    except RuntimeError as e:
+        print(e)
+        return
 
     # run ape
     print('run_ape(): Emulator[{}, {}] Running APE with apk={}'.format(avd_name, avd.serial, apk_path))

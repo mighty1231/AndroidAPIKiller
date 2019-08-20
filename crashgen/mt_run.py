@@ -7,7 +7,8 @@ from androidkit import (
     get_pids,
     run_adb_cmd,
     AdbOfflineError,
-    unset_multiprocessing_mode
+    unset_multiprocessing_mode,
+    RunCmdError
 )
 
 STATE_START_CONSTRUCTED = 0
@@ -35,6 +36,7 @@ class Connections:
         # If the process is dead, pull related logs
         pids = get_pids(self.package_name,
                 serial=self.serial)
+        pulled_prefixes = []
         remaining_procs = []
         for running_pid, prefix in self.started_processes:
             if running_pid not in pids:
@@ -47,13 +49,28 @@ class Connections:
                             break
                         fname = line.rstrip()
                         print(" - pulling and removing {}".format(fname))
-                        run_adb_cmd("pull {} {}".format(fname, self.output_folder),
-                                serial=self.serial)
+                        try:
+                            run_adb_cmd("pull {} {}".format(fname, self.output_folder),
+                                    serial=self.serial)
+                        except RunCmdError as e:
+                            print('Weird case found!')
+                            print(e.message)
+                            print()
+                            print('Following is command output for ls...')
+                            print(out)
+                            print()
+                            print('Now, ls result is...')
+                            print(run_adb_cmd('shell ls {}*'.format(prefix),
+                                    serial=self.serial))
+                            import sys
+                            sys.exit(1)
                         run_adb_cmd("shell rm {}".format(fname),
                                 serial=self.serial)
+                    pulled_prefixes.append(prefix)
                     continue
             remaining_procs.append((running_pid, prefix))
         self.started_processes = remaining_procs
+        return pulled_prefixes
 
     def new_start_connection(self, socketfd, pid):
         if socketfd in self.connections:
