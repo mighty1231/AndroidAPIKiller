@@ -17,11 +17,12 @@ def parse(dataf, threads_infof, methods_infof):
     with open(threads_infof, 'rt') as f:
         for line in f:
             tid, name = line.rstrip().split('\t')
+            tid = int(tid)
             if tid in threads:
                 print('Same tid with different thread name case is found!')
                 print('Thread tid={} name {} <-> {}'.format(tid, threads[tid], name))
                 sys.exit(1)
-            threads[tid] = name
+            threads[] = name
     
     methods = dict()
     with open(methods_infof, 'rt') as f:
@@ -71,7 +72,10 @@ def parse(dataf, threads_infof, methods_infof):
     idx = 0
     while idx < len(data):
         tid = b2u2(data, idx)
-        tname = threads[tid]
+        try:
+            tname = threads[tid]
+        except KeyError:
+            tname = 'Thread-{}'.format(tid)
         value = b2u4(data, idx+2)
 
         action = value & kMiniTraceActionMask;
@@ -103,4 +107,5 @@ def parse(dataf, threads_infof, methods_infof):
 
 
 if __name__ == "__main__":
-    parse('')
+    # parse('../crashgen/mt_output_temp/mt_0_data.bin', '../crashgen/mt_output_temp/mt_0_info_t.log', '../crashgen/mt_output_temp/mt_0_info_m.log')
+    parse('mt_output_check/mt_4_data.bin', 'mt_output_check/mt_4_info_t.log', 'mt_output_check/mt_4_info_m.log')

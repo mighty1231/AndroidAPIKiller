@@ -44,6 +44,7 @@ class Connections:
                 out = run_adb_cmd('shell ls {}*'.format(prefix),
                         serial=self.serial)
                 if "No such file or directory" not in out:
+                    is_failed_to_pull = False
                     for line in out.split():
                         if line == '':
                             break
@@ -53,20 +54,14 @@ class Connections:
                             run_adb_cmd("pull {} {}".format(fname, self.output_folder),
                                     serial=self.serial)
                         except RunCmdError as e:
-                            print('Weird case found!')
-                            print(e.message)
-                            print()
-                            print('Following is command output for ls...')
-                            print(out)
-                            print()
-                            print('Now, ls result is...')
-                            print(run_adb_cmd('shell ls {}*'.format(prefix),
-                                    serial=self.serial))
-                            import sys
-                            sys.exit(1)
+                            # @TODO How could it be happen?
+                            print(" - failed to pull and remove {}".format(fname), file=sys.stderr)
+                            is_failed_to_pull = True
+                            break
                         run_adb_cmd("shell rm {}".format(fname),
                                 serial=self.serial)
-                    pulled_prefixes.append(prefix)
+                    if not is_failed_to_pull:
+                        pulled_prefixes.append(prefix)
                     continue
             remaining_procs.append((running_pid, prefix))
         self.started_processes = remaining_procs
