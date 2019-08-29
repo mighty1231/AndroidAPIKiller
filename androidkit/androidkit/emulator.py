@@ -9,6 +9,7 @@ from .avd import get_avd_list
 def emulator_wait_for_boot(avd_name, r_fd=None, serial=None):
     bootanim = ''
     not_found_cnt = 0
+    wait_anim_count = 0
     while not bootanim.startswith('stopped'):
         try:
             print('RunEmulator[{}, {}]: shell getprop init.svc.bootanim'.format(avd_name, serial))
@@ -17,10 +18,10 @@ def emulator_wait_for_boot(avd_name, r_fd=None, serial=None):
             if 'not found' in e.err and not_found_cnt < 4:
                 not_found_cnt += 1
             else:
-                print('RunEmulator[{}, {}]: Failed, check follow message'.format(avd_name, serial))
+                print('RunEmulator[{}, {}]: Failed, check following message'.format(avd_name, serial))
                 print(e.message)
-                print('RunEmulator[{}, {}]: Following message from proc'.format(avd_name, serial))
                 if r_fd is not None:
+                    print('RunEmulator[{}, {}]: Message from emulator'.format(avd_name, serial))
                     handle = os.fdopen(r_fd, 'r')
                     while True:
                         line = handle.readline()
@@ -28,8 +29,22 @@ def emulator_wait_for_boot(avd_name, r_fd=None, serial=None):
                             break
                         print(line, end='')
                     handle.close()
-                return False
+                raise RuntimeError
         print('RunEmulator[{}, {}]: Waiting for booting emulator'.format(avd_name, serial))
+        wait_anim_count += 1
+        if wait_anim_count > 6: # waited for 30 seconds
+            print('RunEmulator[{}, {}]: Failed'.format(avd_name, serial))
+            if r_fd is not None:
+                print('RunEmulator[{}, {}]: Check message from emulator'.format(avd_name, serial))
+                kill_emulator(serial)
+                handle = os.fdopen(r_fd, 'r')
+                while True:
+                    line = handle.readline()
+                    if not line:
+                        break
+                    print(line, end='')
+                handle.close()
+            raise RuntimeError
         time.sleep(5)
     return True
 
@@ -106,47 +121,16 @@ def emulator_run_and_wait(avd_name, serial=None, snapshot=None, wipe_data=False,
     return serial
 
 def emulator_setup(serial = None):
-    ''' File setup borrowed from Stoat '''
+    # Install various files to sdcard
+    # These files are from Stoat
+
     folder, filename = os.path.split(__file__)
-    files = [
-        "./sdcard/1.vcf",
-        "./sdcard/2.vcf",
-        "./sdcard/3.vcf",
-        "./sdcard/4.vcf",
-        "./sdcard/5.vcf",
-        "./sdcard/6.vcf",
-        "./sdcard/7.vcf",
-        "./sdcard/8.vcf",
-        "./sdcard/9.vcf",
-        "./sdcard/10.vcf",
-        "./sdcard/Troy_Wolf.vcf",
-        "./sdcard/pic1.jpg",
-        "./sdcard/pic2.jpg",
-        "./sdcard/pic3.jpg",
-        "./sdcard/pic4.jpg",
-        "./sdcard/example1.txt",
-        "./sdcard/example2.txt",
-        "./sdcard/license.txt",
-        "./sdcard/first.img",
-        "./sdcard/sec.img",
-        "./sdcard/hackers.pdf",
-        "./sdcard/Hacking_Secrets_Revealed.pdf",
-        "./sdcard/Heartbeat.mp3",
-        "./sdcard/intermission.mp3",
-        "./sdcard/mpthreetest.mp3",
-        "./sdcard/sample.3gp",
-        "./sdcard/sample_iPod.m4v",
-        "./sdcard/sample_mpeg4.mp4",
-        "./sdcard/sample_sorenson.mov",
-        "./sdcard/wordnet-3.0-1.html.aar",
-        "./sdcard/sample_3GPP.3gp.zip",
-        "./sdcard/sample_iPod.m4v.zip",
-        "./sdcard/sample_mpeg4.mp4.zip",
-        "./sdcard/sample_sorenson.mov.zip",
-    ]
-    for file in files:
-        res = run_adb_cmd("push {} /mnt/sdcard/".format(os.path.join(folder, file)), serial=serial)
-        print(res)
+
+    run_adb_cmd("push {} /mnt/sdcard/tmp".format(os.path.join(folder, 'sdcard')),
+        serial=serial)
+    run_adb_cmd("shell mv /mnt/sdcard/tmp/* /mnt/sdcard/", serial=serial)
+    run_adb_cmd("shell rm -rf /mnt/sdcard/tmp", serial=serial)
+    print("emulator_setup() complete")
 
 def kill_emulator(serial = None):
     run_adb_cmd('emu kill', serial = serial)

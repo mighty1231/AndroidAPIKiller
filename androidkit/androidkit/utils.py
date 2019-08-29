@@ -395,7 +395,10 @@ def save_snapshot(name, serial = None):
     return run_adb_cmd("emu avd snapshot save \"{}\"".format(name), serial=serial)
 
 def load_snapshot(name, serial = None):
-    return run_adb_cmd("emu avd snapshot load \"{}\"".format(name), serial=serial)
+    out = run_adb_cmd("emu avd snapshot load \"{}\"".format(name), serial=serial)
+    if 'Error' in out:
+        print(out, file=sys.stderr)
+        raise RuntimeError("load snapshot error")
 
 def list_snapshots(serial = None):
     res = run_adb_cmd("emu avd snapshot list", serial=serial)
