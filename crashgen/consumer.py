@@ -32,7 +32,7 @@ def b2u2(buf, idx = 0):
 
 def parse_threadinfo(threadinfo_fname):
     threads = dict()
-    with open(thread_fname, 'rt') as f:
+    with open(threadinfo_fname, 'rt') as f:
         for line in f:
             if line[-1] != '\n':
                 break
@@ -45,7 +45,7 @@ def parse_threadinfo(threadinfo_fname):
 
 def parse_methodinfo(methodinfo_fname):
     methods = dict()
-    with open(method_fname, 'rt') as f:
+    with open(methodinfo_fname, 'rt') as f:
         for line in f:
             if line[-1] != '\n':
                 break
@@ -141,50 +141,35 @@ def collapse(prefix):
 
     return 0
 
-def collapse_v2(prefix, files):
+def collapse_v2(prefix):
     # data_fname = prefix + "data_#.bin"
-    field_fname = prefix + "info_f.log"
+    # field_fname = prefix + "info_f.log" <- unused
     method_fname = prefix + "info_m.log"
     thread_fname = prefix + "info_t.log"
 
-    if not all(f in files for f in [field_fname, method_fname, thread_fname]):
+    if not os.path.isfile(method_fname) or not os.path.isfile(thread_fname):
         print('Failure on collapse', file = sys.stderr)
-        print('Files:', ', '.join(files), file = sys.stderr)
+        print('Files', ', '.join(glob.glob(prefix + '*')))
         return
 
-    files.remove(field_fname)
-    files.remove(method_fname)
-    files.remove(thread_fname)
-
-    # all the other filenames should follow {prefix}data_#.bin
-    matches = list(map(lambda f:re.match(r'data_([0-9]*)\.bin', f[len(prefix):]),
-            files))
-    if not all(matches):
-        print('Failure on collapse', file = sys.stderr)
-        print('Non-info files:', ', '.join(files), file = sys.stderr)
-        return
-
-    threads = parse_threadinfo(thread_fname)
     methods = parse_methodinfo(method_fname)
-    with open(thread_fname + '.pk', 'wb') as pkfile:
-        pickle.dump(threads, pkfile)
-    with open(method_fname + '.pk', 'wb') as pkfile:
-        pickle.dump(methods, pkfile)
+    threads = parse_threadinfo(thread_fname)
 
-    for data_fname, idx in zip(files, matches):
-        out_fname = prefix + "collapse_{}.pk".format(idx.group(1))
+    def log_to_counter(counter, tid, method_loc):
+        if tid not in counter:
+            counter[tid] = {method_loc: 1}
+        else:
+            try:
+                counter[tid][method_loc] += 1
+            except KeyError as e:
+                counter[tid][method_loc] = 1
+
+    for data_fname in glob.glob(prefix + "data_*.bin"):
+        idx = re.match(r"data_(.*)\.bin", data_fname[len(prefix):]).group(1)
+        out_fname = prefix + "collapse_{}.pk".format(idx)
 
         # Collapse binary log. Get count of method invocation for each thread
         counter = dict() # DICT COUNTER : tid -> (DICT : method_loc -> count)
-        def log_to_counter(tid, method_loc):
-            if tid not in counter:
-                counter[tid] = {method_loc: 1}
-            else:
-                try:
-                    counter[tid][method_loc] += 1
-                except KeyError as e:
-                    counter[tid][method_loc] = 1
-
         with open(data_fname, 'rb') as f:
             i = 0
             while True:
@@ -200,7 +185,7 @@ def collapse_v2(prefix, files):
                 fptr = value & ~kMiniTraceActionMask
                 if action == 0:
                     if fptr in methods:
-                        log_to_counter(tid, fptr)
+                        log_to_counter(counter, tid, fptr)
                     else:
                         print("Warning on collapse: function %08X" % fptr, file=sys.stderr)
                 else:
@@ -295,4 +280,5 @@ if __name__ == "__main__":
     # sort_method_count_pair('mt_output/mt_0_enterexit_method_count.txt')
     # collapse_reader("mt_output/mt_0_collapse.txt")
     # collapse_directory('../data/apk_with_reports/0001/mt_output_check')
-    collapse_directory()
+    # collapse_directory()
+    collapse_v2("mt_output_tmp/mt_0_")

@@ -63,18 +63,19 @@ class Connections:
         if socketfd not in self.connections:
             raise WrongConnectionState
 
-        pulled_files = []
         state, data = self.connections[socketfd]
         if state == STATE_RUNNING:
             pid, prefix_ = data
             assert prefix == prefix_, (prefix, prefix_)
 
+            prefix_local = os.path.join(self.output_folder, os.path.split(prefix)[1])
+
             # clean up given prefix
-            print("CONNECTION: close connection on {}".format(
-                    os.path.join(self.output_folder, os.path.split(prefix)[1])))
+            print("CONNECTION: close connection on {}".format(prefix_local))
             out = run_adb_cmd('shell ls {}*'.format(prefix),
                     serial=self.serial)
             if "No such file or directory" not in out:
+                pulled_files = []
                 for line in out.split():
                     if line == '':
                         break
@@ -91,12 +92,12 @@ class Connections:
                         print("CONNECTION: - failed to pull and remove {}".format(fname), file=sys.stderr)
                         for file in pulled_files:
                             os.remove(file)
-                        pulled_files = []
+                        prefix_local = ""
                         break
                     run_adb_cmd("shell rm {}".format(fname),
                             serial=self.serial)
             del self.connections[socketfd]
-            return os.path.split(prefix)[1], pulled_files
+            return prefix_local
         else:
             raise WrongConnectionState
 
@@ -105,7 +106,19 @@ class Connections:
             return False
         unset_multiprocessing_mode()
         self._clean_up = True
+
+        print('CONNECTION: cleaning connections...')
         kill_mtserver(self.serial)
+        while self.connections:
+            socketfd, (state, data) = next(iter(self.connections.items()))
+
+            if state == STATE_CONSTRUCTED:
+                continue
+
+            assert state == STATE_RUNNING
+            pid, prefix = data
+            self.close_connection(socketfd, prefix)
+
         print('----- Start of the stdout log -----')
         for l in self.log:
             print(l)

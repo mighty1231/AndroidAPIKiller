@@ -97,11 +97,11 @@ class ConnectionsWithValue(Connections):
             self._value.value += 1
         super(ConnectionsWithValue, self).stdout_callback(line)
 
-    def close_connection(self, socketfd):
-        prefix, pulled_files = super(ConnectionsWithValue, self).close_connection(socketfd)
-        if pulled_files != []:
-            thread = threading.Thread(Target=collapse_v2,
-                args=(prefix, pulled_files))
+    def close_connection(self, socketfd, prefix):
+        prefix_local = super(ConnectionsWithValue, self).close_connection(socketfd, prefix)
+        if prefix_local != '':
+            thread = threading.Thread(target=collapse_v2,
+                args=(prefix_local, ))
             thread.start()
             self._threads.append(thread)
 
