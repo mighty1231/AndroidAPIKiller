@@ -18,12 +18,11 @@ from androidkit import (
 import time
 import multiprocessing as mp
 from multiprocessing.sharedctypes import Value
-from mt_run import Connections, kill_mtserver, WrongConnectionState, STATE_STOP_CONSTRUCTED
+from mt_run import Connections, kill_mtserver, WrongConnectionState
 from ape_runner import fetch_result
-import time
 
 # compress files with thread
-from consumer import collapse
+from consumer import collapse_v2
 import threading
 
 ART_APE_MT_READY_SS = "ART_APE_MT" # snapshot name
@@ -45,7 +44,7 @@ def install_art_ape_mt(avd_name, libart_path, ape_jar_path, mtserver_path, force
     if avd.running:
         if not force_clear and ART_APE_MT_READY_SS in list_snapshots(serial = avd.serial):
             load_snapshot(ART_APE_MT_READY_SS, serial = avd.serial)
-            time.sleep(1)
+            time.sleep(3)
             assert libart_check(libart_path, serial = avd.serial)
             return avd
         serial = avd.serial
@@ -96,32 +95,15 @@ class ConnectionsWithValue(Connections):
     def stdout_callback(self, line):
         if line.startswith('Server with uid'):
             self._value.value += 1
-        import datetime
-        print(datetime.datetime.now().strftime('%m-%d %H:%M:%S') + ' : ' + line)
         super(ConnectionsWithValue, self).stdout_callback(line)
 
-    def _check_processes(self):
-        pulled_prefixes = super(ConnectionsWithValue, self)._check_processes()
-        for prefix in pulled_prefixes:
-            prefix_dirname, prefix_filename = os.path.split(prefix)
-            thread = threading.Thread(target=collapse, args=(os.path.join(self.output_folder, prefix_filename), ))
-            thread.start()
-            self._threads.append(thread)
-
     def close_connection(self, socketfd):
-        # find prefix for open connections
-        if socketfd not in self.connections:
-            raise WrongConnectionState
-
-        state, data = self.connections[socketfd]
-        if state == STATE_STOP_CONSTRUCTED:
-            targetpid = data
-            prefix = next(prefix for pid, prefix in self.started_processes if pid == targetpid)
-            prefix_dirname, prefix_filename = os.path.split(prefix)
-            thread = threading.Thread(target=collapse, args=(os.path.join(self.output_folder, prefix_filename), ))
+        prefix, pulled_files = super(ConnectionsWithValue, self).close_connection(socketfd)
+        if pulled_files != []:
+            thread = threading.Thread(Target=collapse_v2,
+                args=(prefix, pulled_files))
             thread.start()
             self._threads.append(thread)
-        super(ConnectionsWithValue, self).close_connection(socketfd)
 
     def clean_up(self):
         print('Waiting for collapsing threads')
@@ -132,35 +114,32 @@ class ConnectionsWithValue(Connections):
 def mt_task(package_name, output_folder, serial, logging_flag, mt_is_running):
     connections = ConnectionsWithValue(package_name, serial, output_folder, mt_is_running)
 
-    while True:
-        kill_mtserver(serial)
-        try:
-            print('Running mtserver...')
-            out = run_adb_cmd('shell /data/local/tmp/mtserver server {} {}'  \
-                    .format(package_name, logging_flag),
-                stdout_callback = connections.stdout_callback,
-                serial=serial)
-            break
-        except WrongConnectionState:
-            print('Wrong state on connection! Check follow log...')
-            for line in connections.log:
-                print(line)
+    kill_mtserver(serial)
+    try:
+        print('Start mtserver...')
+        out = run_adb_cmd('shell /data/local/tmp/mtserver server {} {}'  \
+                .format(package_name, logging_flag),
+            stdout_callback = connections.stdout_callback,
+            stderr_callback = connections.stderr_callback,
+            serial=serial)
+    except WrongConnectionState:
+        print('CONNECTION: WrongConnectionState. Check follow log...')
+        for line in connections.log:
+            print(line)
 
-            kill_mtserver(serial)
-            break
-        except KeyboardInterrupt:
-            connections.clean_up()
-            raise
-        except Exception:
-            connections.clean_up()
-            raise
+        kill_mtserver(serial)
+    except KeyboardInterrupt:
+        connections.clean_up()
+        raise
+    except Exception:
+        connections.clean_up()
+        raise
     connections.clean_up()
 
 
 def ape_task(avd_name, serial, package_name, output_dir, running_minutes, mt_is_running):
     while mt_is_running.value == 0:
-        pass
-    print('mt is running = ', mt_is_running.value)
+        time.sleep(1)
     print('ape_task(): Emulator[{}, {}] Running APE with package {}'.format(avd_name, serial, package_name))
     args = '-p {} --running-minutes {} --ape sata'.format(package_name, running_minutes)
     ret = run_adb_cmd('shell CLASSPATH={} {} {} {} {}'.format(
