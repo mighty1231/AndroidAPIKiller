@@ -11,12 +11,13 @@ kMiniTraceFieldWrite = 0x04
 kMiniTraceExceptionCaught = 0x05
 kMiniTraceActionMask = 0x07
 action_to_string = [
-    '%10s Entering  method 0x%08X %s \t %s',
-    '%10s Exiting   method 0x%08X %s \t %s',
-    '%10s Unrolling method 0x%08X %s \t %s',
+    '%10s Entering  method 0x%08X %s\t%s\t%s\t%s',
+    '%10s Exiting   method 0x%08X %s\t%s\t%s\t%s',
+    '%10s Unrolling method 0x%08X %s\t%s\t%s\t%s',
     '%10s Reading field 0x%08X object 0x%08X dex 0x%08X',
     '%10s Writing field 0x%08X object 0x%08X dex 0x%08X',
-    '%10s ExceptionCaught----\n%s\n----ExceptionCaught'
+    '%10s ExceptionCaught----\n%s\n----ExceptionCaught',
+    '%10s Hooked Message %s'
 ]
 
 def b2u4(buf, idx = 0):
@@ -203,6 +204,51 @@ def collapse_v2(prefix):
 
     return 0
 
+def print_data(prefix):
+    data_fname = prefix + "data_0.bin"
+    field_fname = prefix + "info_f.log"
+    method_fname = prefix + "info_m.log"
+    thread_fname = prefix + "info_t.log"
+    out_fname = prefix + "collapse.txt"
+
+    threads = parse_threadinfo(thread_fname)
+    methods = parse_methodinfo(method_fname)
+
+    with open(data_fname, 'rb') as f:
+        while True:
+            tid = f.read(2)
+            if len(tid) < 2:
+                break
+            tid = b2u2(tid)
+            try:
+                tname = threads[tid]
+            except KeyError:
+                tname = 'Thread-{}'.format(tid)
+            value = f.read(4)
+            if len(value) < 4:
+                break
+            value = b2u4(value)
+            action = value & kMiniTraceActionMask
+            value = value & ~kMiniTraceActionMask
+
+            if action <= 2: # method event
+                print(action_to_string[action] % (tname, value, *methods[value]))
+            elif action <= 4: # field event
+                extra_data = f.read(8)
+                if len(extra_data) != 8:
+                    break
+                obj = b2u4(extra_data, 0)
+                dex = b2u4(extra_data, 4)
+                print(action_to_string[action] % (tname, value, obj, dex))
+            elif action <= 6: # exception / message
+                length = (value >> 3) - 6
+                buf = f.read(length)
+                if len(buf) != length:
+                    break
+                # ended with null character
+                print(action_to_string[action] % (tname, buf[:-1].decode()))
+            else:
+                raise RuntimeError
 
 def collapse_reader(fname):
     global_m2c = dict()
@@ -281,4 +327,6 @@ if __name__ == "__main__":
     # collapse_reader("mt_output/mt_0_collapse.txt")
     # collapse_directory('../data/apk_with_reports/0001/mt_output_check')
     # collapse_directory()
-    collapse_v2("mt_output_tmp/mt_0_")
+    # collapse_v2("mt_output_tmp/mt_0_")
+    import sys
+    print_data(sys.argv[1])
