@@ -143,8 +143,6 @@ def collapse(prefix):
     return 0
 
 def collapse_v2(prefix):
-    # data_fname = prefix + "data_#.bin"
-    # field_fname = prefix + "info_f.log" <- unused
     method_fname = prefix + "info_m.log"
     thread_fname = prefix + "info_t.log"
 
@@ -201,6 +199,106 @@ def collapse_v2(prefix):
         os.remove(data_fname)
         with open(out_fname, 'wb') as pkfile:
             pickle.dump(counter, pkfile)
+
+    return 0
+
+def collapse_per_message(prefix):
+    method_fname = prefix + "info_m.log"
+    thread_fname = prefix + "info_t.log"
+
+    if not os.path.isfile(method_fname) or not os.path.isfile(thread_fname):
+        print('Failure on collapse', file = sys.stderr)
+        print('Files', ', '.join(glob.glob(prefix + '*')))
+        return
+
+    methods = parse_methodinfo(method_fname)
+    threads = parse_threadinfo(thread_fname)
+
+    def log_to_counter(counter, tid, method_loc):
+        if tid not in counter:
+            counter[tid] = {method_loc: 1}
+        else:
+            try:
+                counter[tid][method_loc] += 1
+            except KeyError as e:
+                counter[tid][method_loc] = 1
+
+    data_files = glob.glob(prefix + "data_*.bin") # remaining binaries should be removed
+
+    with open(prefix + "per_message.bin") as outf:
+        # Get count of method invocation for each thread, seperate for each message called
+        counter = dict() # DICT COUNTER: tid -> (DICT : method_loc -> count)
+        cur_message = "Initial"
+        idx = 0
+        data_fname = prefix + "data_{}.bin".format(idx)
+        while os.path.isfile(data_fname):
+            with open(data_fname, 'rb') as f:
+                while True:
+                    tid = f.read(2)
+                    if len(tid) < 2:
+                        break
+                    tid = b2u2(tid)
+                    value = f.read(4)
+                    if len(value) < 4:
+                        break
+                    value = b2u4(value)
+                    action = value & kMiniTraceActionMask
+                    value = value & ~kMiniTraceActionMask
+                    if action == 0:
+                        value = value
+                        if value in methods:
+                            log_to_counter(counter, tid, fptr)
+                        else:
+                            print("Warning on collapse: function %08X" % fptr, file=sys.stderr)
+                    elif action == 5: # exception
+                        length = (value >> 3) - 6
+                        buf = f.read(length)
+                        if len(buf) != length:
+                            break
+                    elif action == 6: # message
+                        length = (value >> 3) - 6
+                        buf = f.read(length)
+                        if len(buf) != length:
+                            break
+
+                        # store to file
+                        outf.write("[Message] {}\n".format(cur_message))
+                        for tid in counter:
+                            try:
+                                tname = threads[tid]
+                            except KeyError:
+                                tname = 'Thread-{}'.format(tid)
+
+                            # sort methods by invocation count
+                            m2c = counter[tid]
+                            for method_ptr in sorted(m2c.keys(), key=lambda method_ptr:-m2c[method_ptr]):
+                                outf.write(tname)
+                                outf.write("\t%d\t%08X\t" % (m2c[method_ptr], method_ptr))
+                                outf.write('\t'.join(methods[method_ptr]))
+                                outf.write('\n')
+
+                        # make new line
+                        counter = dict()
+                        cur_message = buf[:-1].decode()
+                    else:
+                        print("Warning on collapse: action {}, expected 0, 5 or 6".format(action), file=sys.stderr)
+                        cur_location = f.tell()
+                        file_size = f.seek(0, 2)
+                        print("Remaining size is", file_size - cur_location, file=sys.stderr)
+                        break
+
+            # iterate
+            data_files.remove(data_fname)
+            os.remove(data_fname)
+            idx += 1
+            data_fname = prefix + "data_{}.bin".format(idx)
+
+        # remove files for files with incomplete index
+        # if data files with index 0, 1, 3 and 4, without 2, due to some problem..(?)
+        # data files with index 3, 4 should be removed.
+        for data_fname in data_files:
+            print("Warning on collapse: data file {} was thrown".format(data_fname))
+            os.remove(data_fname)
 
     return 0
 

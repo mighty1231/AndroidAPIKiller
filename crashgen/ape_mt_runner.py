@@ -22,7 +22,7 @@ from mt_run import Connections, kill_mtserver, WrongConnectionState
 from ape_runner import fetch_result
 
 # compress files with thread
-from consumer import collapse_v2
+from consumer import collapse_per_message
 import threading
 
 ART_APE_MT_READY_SS = "ART_APE_MT" # snapshot name
@@ -100,7 +100,7 @@ class ConnectionsWithValue(Connections):
     def close_connection(self, socketfd, prefix):
         prefix_local = super(ConnectionsWithValue, self).close_connection(socketfd, prefix)
         if prefix_local != '':
-            thread = threading.Thread(target=collapse_v2,
+            thread = threading.Thread(target=collapse_per_message,
                 args=(prefix_local, ))
             thread.start()
             self._threads.append(thread)
