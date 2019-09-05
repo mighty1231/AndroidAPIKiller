@@ -11,11 +11,11 @@ kMiniTraceFieldWrite = 0x04
 kMiniTraceExceptionCaught = 0x05
 kMiniTraceActionMask = 0x07
 action_to_string = [
-    '%10s Entering  method 0x%08X %s\t%s\t%s\t%s',
-    '%10s Exiting   method 0x%08X %s\t%s\t%s\t%s',
-    '%10s Unrolling method 0x%08X %s\t%s\t%s\t%s',
-    '%10s Reading field 0x%08X object 0x%08X dex 0x%08X',
-    '%10s Writing field 0x%08X object 0x%08X dex 0x%08X',
+    '%10s Entering  method 0x%08X %s',
+    '%10s Exiting   method 0x%08X %s',
+    '%10s Unrolling method 0x%08X %s',
+    '%10s Reading field 0x%08X object 0x%08X dex 0x%08X %s',
+    '%10s Writing field 0x%08X object 0x%08X dex 0x%08X %s',
     '%10s ExceptionCaught----\n%s\n----ExceptionCaught',
     '%10s Hooked Message %s'
 ]
@@ -51,15 +51,30 @@ def parse_methodinfo(methodinfo_fname):
             if line[-1] != '\n':
                 break
             tokens = line.rstrip().split('\t')
-            assert len(tokens) == 5, (prefix, line)
+            assert len(tokens) == 5, (methodinfo_fname, line)
 
             method_loc = int(tokens[0], 16)
-            assert method_loc not in methods, (prefix, line)
+            assert method_loc not in methods, (methodinfo_fname, line)
 
-            methods[method_loc] = \
-                (tokens[1], tokens[2], tokens[3], tokens[4])
+            methods[method_loc] = tokens[1:]
 
     return methods
+
+def parse_fieldinfo(fieldinfo_fname):
+    fields = dict()
+    with open(fieldinfo_fname, 'rt') as f:
+        for line in f:
+            if line[-1] != '\n':
+                break
+            tokens = line.rstrip().split('\t')
+            assert len(tokens) == 4, (fieldinfo_fname, line)
+
+            tokens_loc = int(tokens[0], 16)
+            assert tokens_loc not in fields, (fieldinfo_fname, line)
+
+            fields[tokens_loc] = tokens[1:]
+
+    return fields
 
 def pprint_counter(dic, methods, threads):
     # store to collapsed file
@@ -225,7 +240,7 @@ def collapse_per_message(prefix):
 
     data_files = glob.glob(prefix + "data_*.bin") # remaining binaries should be removed
 
-    with open(prefix + "per_message.bin") as outf:
+    with open(prefix + "per_message.txt", 'wt') as outf:
         # Get count of method invocation for each thread, seperate for each message called
         counter = dict() # DICT COUNTER: tid -> (DICT : method_loc -> count)
         cur_message = "Initial"
@@ -247,9 +262,9 @@ def collapse_per_message(prefix):
                     if action == 0:
                         value = value
                         if value in methods:
-                            log_to_counter(counter, tid, fptr)
+                            log_to_counter(counter, tid, value)
                         else:
-                            print("Warning on collapse: function %08X" % fptr, file=sys.stderr)
+                            print("Warning on collapse: function %08X" % value, file=sys.stderr)
                     elif action == 5: # exception
                         length = (value >> 3) - 6
                         buf = f.read(length)
@@ -302,8 +317,8 @@ def collapse_per_message(prefix):
 
     return 0
 
-def print_data(prefix):
-    data_fname = prefix + "data_0.bin"
+def print_data(prefix, idx = 0):
+    data_fname = prefix + "data_{}.bin".format(idx)
     field_fname = prefix + "info_f.log"
     method_fname = prefix + "info_m.log"
     thread_fname = prefix + "info_t.log"
@@ -311,6 +326,7 @@ def print_data(prefix):
 
     threads = parse_threadinfo(thread_fname)
     methods = parse_methodinfo(method_fname)
+    fields = parse_fieldinfo(field_fname)
 
     with open(data_fname, 'rb') as f:
         while True:
@@ -330,14 +346,22 @@ def print_data(prefix):
             value = value & ~kMiniTraceActionMask
 
             if action <= 2: # method event
-                print(action_to_string[action] % (tname, value, *methods[value]))
+                if value not in methods:
+                    item = ["method_%08X" % value]
+                else:
+                    item = methods[value]
+                print(action_to_string[action] % (tname, value, '\t'.join(item)))
             elif action <= 4: # field event
                 extra_data = f.read(8)
                 if len(extra_data) != 8:
                     break
+                if value not in fields:
+                    item = ["field_%08X" % value]
+                else:
+                    item = fields[value]
                 obj = b2u4(extra_data, 0)
                 dex = b2u4(extra_data, 4)
-                print(action_to_string[action] % (tname, value, obj, dex))
+                print(action_to_string[action] % (tname, value, obj, dex, '\t'.join(item)))
             elif action <= 6: # exception / message
                 length = (value >> 3) - 6
                 buf = f.read(length)
@@ -427,4 +451,5 @@ if __name__ == "__main__":
     # collapse_directory()
     # collapse_v2("mt_output_tmp/mt_0_")
     import sys
+    # collapse_per_message(sys.argv[1])
     print_data(sys.argv[1])
