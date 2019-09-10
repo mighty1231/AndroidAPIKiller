@@ -2,6 +2,7 @@ import os, glob
 import re
 import sys
 import pickle
+import argparse
 
 kMiniTraceMethodEnter = 0x00
 kMiniTraceMethodExit = 0x01
@@ -10,15 +11,6 @@ kMiniTraceFieldRead = 0x03
 kMiniTraceFieldWrite = 0x04
 kMiniTraceExceptionCaught = 0x05
 kMiniTraceActionMask = 0x07
-action_to_string = [
-    '%10s Entering  method 0x%08X %s',
-    '%10s Exiting   method 0x%08X %s',
-    '%10s Unrolling method 0x%08X %s',
-    '%10s Reading field 0x%08X object 0x%08X dex 0x%08X %s',
-    '%10s Writing field 0x%08X object 0x%08X dex 0x%08X %s',
-    '%10s ExceptionCaught----\n%s\n----ExceptionCaught',
-    '%10s Hooked Message %s'
-]
 
 def b2u4(buf, idx = 0):
     assert isinstance(buf, bytes)
@@ -76,6 +68,52 @@ def parse_fieldinfo(fieldinfo_fname):
 
     return fields
 
+def parse_data(data_fname, callbacks=[None for _ in range(7)]):
+    '''
+    Callback for method events 0, 1, 2
+        - argument [tid, ptr]
+    Callback for field events 3, 4
+        - argument [tid, ptr, obj, dex]
+    Callback for exception / messages 5, 6
+        - argument [tid, content_in_string]
+    '''
+    if isinstance(callbacks, dict):
+        callbacks = [callbacks.get(i, None) for i in range(7)]
+    with open(data_fname, 'rb') as f:
+        while True:
+            tid = f.read(2)
+            if len(tid) < 2:
+                break
+            tid = b2u2(tid)
+            value = f.read(4)
+            if len(value) < 4:
+                break
+            value = b2u4(value)
+            action = value & kMiniTraceActionMask
+            value = value & ~kMiniTraceActionMask
+
+            if action <= 2: # method event
+                if callbacks[action]:
+                    callbacks[action](tid, value)
+            elif action <= 4: # field event
+                extra_data = f.read(8)
+                if len(extra_data) != 8:
+                    break
+                if callbacks[action]:
+                    obj = b2u4(extra_data, 0)
+                    dex = b2u4(extra_data, 4)
+                    callbacks[action](tid, value, obj, dex)
+            elif action <= 6: # exception / message
+                length = (value >> 3) - 6
+                buf = f.read(length)
+                if len(buf) != length:
+                    break
+                if callbacks[action]:
+                    # ended with null character
+                    callbacks[action](tid, buf[:-1].decode())
+            else:
+                raise RuntimeError
+
 def pprint_counter(dic, methods, threads):
     # store to collapsed file
     for tid in dic:
@@ -92,7 +130,6 @@ def pprint_counter(dic, methods, threads):
 def collapse(prefix):
     # At now, it only collapses for MethodEntered event
     data_fname = prefix + "data.bin"
-    field_fname = prefix + "info_f.log"
     method_fname = prefix + "info_m.log"
     thread_fname = prefix + "info_t.log"
     out_fname = prefix + "collapse.txt"
@@ -102,43 +139,20 @@ def collapse(prefix):
 
     # Collapse binary log. Get count of method invocation for each thread
     ret = dict() # DICT RET : tid -> (DICT : method_loc -> count)
-    def log_to_ret(tid, method_loc):
-        if tid not in ret:
-            ret[tid] = {method_loc: 1}
-        else:
-            try:
-                ret[tid][method_loc] += 1
-            except KeyError as e:
-                ret[tid][method_loc] = 1
-
-    with open(data_fname, 'rb') as f:
-        i = 0
-        while True:
-            tid = f.read(2)
-            if len(tid) < 2:
-                break
-            tid = b2u2(tid)
-            value = f.read(4)
-            if len(value) < 4:
-                break
-            value = b2u4(value)
-            action = value & kMiniTraceActionMask
-            fptr = value & ~kMiniTraceActionMask
-            if action == 0:
-                if fptr in methods:
-                    log_to_ret(tid, fptr)
-                else:
-                    print("Warning on collapse: function %08X" % fptr, file=sys.stderr)
+    def count_method(tid, fptr):
+        if fptr in methods:
+            if tid not in ret:
+                ret[tid] = {fptr: 1}
             else:
-                print("Warning on collapse: action {}, expected 0".format(action), file=sys.stderr)
-                cur_location = f.tell()
-                file_size = f.seek(0, 2)
-                if file_size - cur_location >= 6:
-                    print("Remaining size is {}, expected <= 6".format(file_size-cur_location), file=sys.stderr)
+                try:
+                    ret[tid][fptr] += 1
+                except KeyError as e:
+                    ret[tid][fptr] = 1
+        else:
+            print("Warning on collapse: function %08X not found" % fptr, file=sys.stderr)
 
-                break
-            i += 1
-            
+    parse_data(data_fname, {kMiniTraceMethodEnter: count_method})
+
     with open(out_fname, 'wt') as f:
         # store to collapsed file
         for tid in ret:
@@ -153,8 +167,6 @@ def collapse(prefix):
                 f.write('\n')
 
     os.remove(data_fname)
-    os.remove(field_fname)
-
     return 0
 
 def collapse_v2(prefix):
@@ -169,47 +181,27 @@ def collapse_v2(prefix):
     methods = parse_methodinfo(method_fname)
     threads = parse_threadinfo(thread_fname)
 
-    def log_to_counter(counter, tid, method_loc):
-        if tid not in counter:
-            counter[tid] = {method_loc: 1}
-        else:
-            try:
-                counter[tid][method_loc] += 1
-            except KeyError as e:
-                counter[tid][method_loc] = 1
 
     for data_fname in glob.glob(prefix + "data_*.bin"):
         idx = re.match(r"data_(.*)\.bin", data_fname[len(prefix):]).group(1)
         out_fname = prefix + "collapse_{}.pk".format(idx)
 
         # Collapse binary log. Get count of method invocation for each thread
-        counter = dict() # DICT COUNTER : tid -> (DICT : method_loc -> count)
-        with open(data_fname, 'rb') as f:
-            i = 0
-            while True:
-                tid = f.read(2)
-                if len(tid) < 2:
-                    break
-                tid = b2u2(tid)
-                value = f.read(4)
-                if len(value) < 4:
-                    break
-                value = b2u4(value)
-                action = value & kMiniTraceActionMask
-                fptr = value & ~kMiniTraceActionMask
-                if action == 0:
-                    if fptr in methods:
-                        log_to_counter(counter, tid, fptr)
-                    else:
-                        print("Warning on collapse: function %08X" % fptr, file=sys.stderr)
-                else:
-                    print("Warning on collapse: action {}, expected 0".format(action), file=sys.stderr)
-                    cur_location = f.tell()
-                    file_size = f.seek(0, 2)
-                    if file_size - cur_location >= 6:
-                        print("Remaining size is {}, expected <= 6".format(file_size-cur_location), file=sys.stderr)
+        counter = dict() # DICT COUNTER : tid -> (DICT : fptr -> count)
 
-                    break
+        def count_method(tid, fptr):
+            if fptr in methods:
+                if tid not in counter:
+                    counter[tid] = {fptr: 1}
+                else:
+                    try:
+                        counter[tid][fptr] += 1
+                    except KeyError as e:
+                        counter[tid][fptr] = 1
+            else:
+                print("Warning on collapse: function %08X not found" % fptr, file=sys.stderr)
+
+        parse_data(data_fname, {kMiniTraceMethodEnter: count_method})
 
         os.remove(data_fname)
         with open(out_fname, 'wb') as pkfile:
@@ -229,78 +221,58 @@ def collapse_per_message(prefix):
     methods = parse_methodinfo(method_fname)
     threads = parse_threadinfo(thread_fname)
 
-    def log_to_counter(counter, tid, method_loc):
-        if tid not in counter:
-            counter[tid] = {method_loc: 1}
-        else:
-            try:
-                counter[tid][method_loc] += 1
-            except KeyError as e:
-                counter[tid][method_loc] = 1
-
     data_files = glob.glob(prefix + "data_*.bin") # remaining binaries should be removed
+
+    class Counter:
+        def __init__(self, threads, methods, outf):
+            self.threads = threads
+            self.methods = methods
+            self.outf = outf
+            self.dict = dict()
+            self.cur_message = "Initial"
+
+        def method_callback(self, tid, fptr):
+            if fptr in self.methods:
+                if tid not in self.dict:
+                    self.dict[tid] = {fptr : 1}
+                else:
+                    try:
+                        self.dict[tid][fptr] += 1
+                    except KeyError as e:
+                        self.dict[tid][fptr] = 1
+            else:
+                print("Warning on collapse: function %08X not found" % fptr, file=sys.stderr)
+
+        def message_callback(self, tid, content):
+            # store to file
+            self.outf.write("[Message] {}\n".format(self.cur_message))
+            for tid in self.dict:
+                try:
+                    tname = self.threads[tid]
+                except KeyError:
+                    tname = 'Thread-{}'.format(tid)
+
+                # sort methods by invocation count
+                m2c = self.dict[tid]
+                for method_ptr in sorted(m2c.keys(), key=lambda method_ptr:-m2c[method_ptr]):
+                    self.outf.write(tname)
+                    self.outf.write("\t%d\t%08X\t" % (m2c[method_ptr], method_ptr))
+                    self.outf.write('\t'.join(self.methods[method_ptr]))
+                    self.outf.write('\n')
+
+            # make new line
+            self.cur_message = content
+            self.dict.clear()
+
 
     with open(prefix + "per_message.txt", 'wt') as outf:
         # Get count of method invocation for each thread, seperate for each message called
-        counter = dict() # DICT COUNTER: tid -> (DICT : method_loc -> count)
-        cur_message = "Initial"
+        # DICT COUNTER: tid -> (DICT : method_loc -> count)
+        counter = Counter(threads, methods, outf)
         idx = 0
         data_fname = prefix + "data_{}.bin".format(idx)
         while os.path.isfile(data_fname):
-            with open(data_fname, 'rb') as f:
-                while True:
-                    tid = f.read(2)
-                    if len(tid) < 2:
-                        break
-                    tid = b2u2(tid)
-                    value = f.read(4)
-                    if len(value) < 4:
-                        break
-                    value = b2u4(value)
-                    action = value & kMiniTraceActionMask
-                    value = value & ~kMiniTraceActionMask
-                    if action == 0:
-                        value = value
-                        if value in methods:
-                            log_to_counter(counter, tid, value)
-                        else:
-                            print("Warning on collapse: function %08X" % value, file=sys.stderr)
-                    elif action == 5: # exception
-                        length = (value >> 3) - 6
-                        buf = f.read(length)
-                        if len(buf) != length:
-                            break
-                    elif action == 6: # message
-                        length = (value >> 3) - 6
-                        buf = f.read(length)
-                        if len(buf) != length:
-                            break
-
-                        # store to file
-                        outf.write("[Message] {}\n".format(cur_message))
-                        for tid in counter:
-                            try:
-                                tname = threads[tid]
-                            except KeyError:
-                                tname = 'Thread-{}'.format(tid)
-
-                            # sort methods by invocation count
-                            m2c = counter[tid]
-                            for method_ptr in sorted(m2c.keys(), key=lambda method_ptr:-m2c[method_ptr]):
-                                outf.write(tname)
-                                outf.write("\t%d\t%08X\t" % (m2c[method_ptr], method_ptr))
-                                outf.write('\t'.join(methods[method_ptr]))
-                                outf.write('\n')
-
-                        # make new line
-                        counter = dict()
-                        cur_message = buf[:-1].decode()
-                    else:
-                        print("Warning on collapse: action {}, expected 0, 5 or 6".format(action), file=sys.stderr)
-                        cur_location = f.tell()
-                        file_size = f.seek(0, 2)
-                        print("Remaining size is", file_size - cur_location, file=sys.stderr)
-                        break
+            parse_data(data_fname, {0: counter.method_callback, 6: counter.message_callback})
 
             # iterate
             data_files.remove(data_fname)
@@ -322,55 +294,31 @@ def print_data(prefix, idx = 0):
     field_fname = prefix + "info_f.log"
     method_fname = prefix + "info_m.log"
     thread_fname = prefix + "info_t.log"
-    out_fname = prefix + "collapse.txt"
 
     threads = parse_threadinfo(thread_fname)
     methods = parse_methodinfo(method_fname)
     fields = parse_fieldinfo(field_fname)
 
-    with open(data_fname, 'rb') as f:
-        while True:
-            tid = f.read(2)
-            if len(tid) < 2:
-                break
-            tid = b2u2(tid)
-            try:
-                tname = threads[tid]
-            except KeyError:
-                tname = 'Thread-{}'.format(tid)
-            value = f.read(4)
-            if len(value) < 4:
-                break
-            value = b2u4(value)
-            action = value & kMiniTraceActionMask
-            value = value & ~kMiniTraceActionMask
+    get_method_info = lambda ptr:methods[ptr] if ptr in methods else ["method_%08X" % ptr]
+    get_field_info = lambda ptr:fields[ptr] if ptr in fields else ["field_%08X" % ptr]
+    get_thread_name = lambda tid:threads[tid] if tid in threads else "Thread-%d" % tid
 
-            if action <= 2: # method event
-                if value not in methods:
-                    item = ["method_%08X" % value]
-                else:
-                    item = methods[value]
-                print(action_to_string[action] % (tname, value, '\t'.join(item)))
-            elif action <= 4: # field event
-                extra_data = f.read(8)
-                if len(extra_data) != 8:
-                    break
-                if value not in fields:
-                    item = ["field_%08X" % value]
-                else:
-                    item = fields[value]
-                obj = b2u4(extra_data, 0)
-                dex = b2u4(extra_data, 4)
-                print(action_to_string[action] % (tname, value, obj, dex, '\t'.join(item)))
-            elif action <= 6: # exception / message
-                length = (value >> 3) - 6
-                buf = f.read(length)
-                if len(buf) != length:
-                    break
-                # ended with null character
-                print(action_to_string[action] % (tname, buf[:-1].decode()))
-            else:
-                raise RuntimeError
+    parse_data(prefix + "data_{}.bin".format(idx), [
+        lambda tid, ptr: print('%10s Entering  method 0x%08X %s' % \
+                (get_thread_name(tid), ptr, '\t'.join(get_method_info(ptr)))),
+        lambda tid, ptr: print('%10s Exiting   method 0x%08X %s' % \
+                (get_thread_name(tid), ptr, '\t'.join(get_method_info(ptr)))),
+        lambda tid, ptr: print('%10s Unrolling method 0x%08X %s' % \
+                (get_thread_name(tid), ptr, '\t'.join(get_method_info(ptr)))),
+        lambda tid, ptr, obj, dex: print('%10s Reading field 0x%08X object 0x%08X dex 0x%08X %s' % \
+                (get_thread_name(tid), ptr, '\t'.join(get_method_info(ptr)))),
+        lambda tid, ptr, obj, dex: print('%10s Writing field 0x%08X object 0x%08X dex 0x%08X %s' % \
+                (get_thread_name(tid), ptr, '\t'.join(get_method_info(ptr)))),
+        lambda tid, msg: print('%10s ExceptionCaught----\n%s\n----ExceptionCaught' % \
+                (get_thread_name(tid), msg)),
+        lambda tid, msg: print('%10s Hooked Message %s' % \
+                (get_thread_name(tid), msg))
+    ])
 
 def collapse_reader(fname):
     global_m2c = dict()
@@ -444,12 +392,15 @@ def collapse_directory():
                 f.write('{}\t{}\n'.format(thread_total_counts[thread][mtdkey], '\t'.join(mtdkey)))
 
 if __name__ == "__main__":
-    # collapse("mt_output/mt_0_")
-    # sort_method_count_pair('mt_output/mt_0_enterexit_method_count.txt')
-    # collapse_reader("mt_output/mt_0_collapse.txt")
-    # collapse_directory('../data/apk_with_reports/0001/mt_output_check')
-    # collapse_directory()
-    # collapse_v2("mt_output_tmp/mt_0_")
-    import sys
-    # collapse_per_message(sys.argv[1])
-    print_data(sys.argv[1])
+    parser = argparse.ArgumentParser(description='Manager for logs from MiniTrace')
+
+    subparsers = parser.add_subparsers(dest='func')
+
+    print_parser = subparsers.add_parser('print')
+    print_parser.add_argument('prefix')
+
+    args = parser.parse_args()
+    if args.func == 'print':
+        print_data(args.prefix)
+    else:
+        raise
