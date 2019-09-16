@@ -37,6 +37,7 @@ def parse_threadinfo(threadinfo_fname):
     return threads
 
 def parse_methodinfo(methodinfo_fname):
+    # ptr -> [classname, methodname, signature, sourcefile]
     methods = dict()
     with open(methodinfo_fname, 'rt') as f:
         for line in f:
@@ -68,6 +69,9 @@ def parse_fieldinfo(fieldinfo_fname):
 
     return fields
 
+class StopParsingData(Exception):
+    pass
+
 def parse_data(data_fname, callbacks=[None for _ in range(7)]):
     '''
     Callback for method events 0, 1, 2
@@ -80,39 +84,43 @@ def parse_data(data_fname, callbacks=[None for _ in range(7)]):
     if isinstance(callbacks, dict):
         callbacks = [callbacks.get(i, None) for i in range(7)]
     with open(data_fname, 'rb') as f:
-        while True:
-            tid = f.read(2)
-            if len(tid) < 2:
-                break
-            tid = b2u2(tid)
-            value = f.read(4)
-            if len(value) < 4:
-                break
-            value = b2u4(value)
-            action = value & kMiniTraceActionMask
-            value = value & ~kMiniTraceActionMask
+        try:
+            while True:
+                tid = f.read(2)
+                if len(tid) < 2:
+                    break
+                tid = b2u2(tid)
+                value = f.read(4)
+                if len(value) < 4:
+                    break
+                value = b2u4(value)
+                action = value & kMiniTraceActionMask
+                value = value & ~kMiniTraceActionMask
 
-            if action <= 2: # method event
-                if callbacks[action]:
-                    callbacks[action](tid, value)
-            elif action <= 4: # field event
-                extra_data = f.read(8)
-                if len(extra_data) != 8:
-                    break
-                if callbacks[action]:
-                    obj = b2u4(extra_data, 0)
-                    dex = b2u4(extra_data, 4)
-                    callbacks[action](tid, value, obj, dex)
-            elif action <= 6: # exception / message
-                length = (value >> 3) - 6
-                buf = f.read(length)
-                if len(buf) != length:
-                    break
-                if callbacks[action]:
-                    # ended with null character
-                    callbacks[action](tid, buf[:-1].decode())
-            else:
-                raise RuntimeError
+                if action <= 2: # method event
+                    if callbacks[action]:
+                        callbacks[action](tid, value)
+                elif action <= 4: # field event
+                    extra_data = f.read(8)
+                    if len(extra_data) != 8:
+                        break
+                    if callbacks[action]:
+                        obj = b2u4(extra_data, 0)
+                        dex = b2u4(extra_data, 4)
+                        callbacks[action](tid, value, obj, dex)
+                elif action <= 6: # exception / message
+                    length = (value >> 3) - 6
+                    buf = f.read(length)
+                    if len(buf) != length:
+                        break
+                    if callbacks[action]:
+                        # ended with null character
+                        callbacks[action](tid, buf[:-1].decode())
+                else:
+                    raise RuntimeError
+
+        except StopParsingData:
+            pass
 
 def pprint_counter(dic, methods, threads):
     # store to collapsed file
@@ -290,14 +298,9 @@ def collapse_per_message(prefix):
     return 0
 
 def print_data(prefix, idx = 0):
-    data_fname = prefix + "data_{}.bin".format(idx)
-    field_fname = prefix + "info_f.log"
-    method_fname = prefix + "info_m.log"
-    thread_fname = prefix + "info_t.log"
-
-    threads = parse_threadinfo(thread_fname)
-    methods = parse_methodinfo(method_fname)
-    fields = parse_fieldinfo(field_fname)
+    threads = parse_threadinfo(prefix + "info_t.log")
+    methods = parse_methodinfo(prefix + "info_m.log")
+    fields = parse_fieldinfo(prefix + "info_f.log")
 
     get_method_info = lambda ptr:methods[ptr] if ptr in methods else ["method_%08X" % ptr]
     get_field_info = lambda ptr:fields[ptr] if ptr in fields else ["field_%08X" % ptr]
@@ -319,6 +322,113 @@ def print_data(prefix, idx = 0):
         lambda tid, msg: print('%10s Hooked Message %s' % \
                 (get_thread_name(tid), msg))
     ])
+
+def inspect_stack(prefix, idx = 0, end_condition = None):
+    # See method stack with specific moment
+    threads = parse_threadinfo(prefix + "info_t.log")
+    methods = parse_methodinfo(prefix + "info_m.log")
+
+    get_method_info = lambda ptr:methods[ptr] if ptr in methods else ["method_%08X" % ptr]
+    get_thread_name = lambda tid:threads[tid] if tid in threads else "Thread-%d" % tid
+
+    def pretty_print_stack(st):
+        for i in range(len(st)-1, max(-1, len(st)-7), -1):
+            print("{} : {}".format(i, st[i]))
+
+    def remove_stack_until(st, fptr, finfos):
+        for i in range(len(st)-1, -1, -1):
+            print(st[i])
+            if st[i] != (fptr, finfos) and st[i] != 'u' and st[i][1][0] == "Ljava/lang/ThreadLocal$Values;":
+                st.pop()
+            else:
+                break
+
+    class MethodStackPerThread:
+        def __init__(self, threads, methods):
+            self.stack_per_thread = {} # tid -> stack
+            self.threads = threads
+            self.methods = methods
+
+        def get_stack(self, tid):
+            try:
+                return self.stack_per_thread[tid]
+            except KeyError:
+                self.stack_per_thread[tid] = []
+                return self.stack_per_thread[tid]
+
+        def enter(self, tid, ptr):
+            stack = self.get_stack(tid)
+            old_level = len(stack)
+            finfos = get_method_info(ptr)
+            if len(stack) > 1 and stack[-1] == 'u' and stack[-2][0] == ptr:
+                stack.pop()
+                stack.pop()
+            stack.append((ptr, get_method_info(ptr)))
+
+            print('%10s %d -> %d Entering  method 0x%08X %s' % \
+                    (get_thread_name(tid), old_level, len(stack), ptr, '\t'.join(finfos)))
+            pretty_print_stack(stack)
+            print()
+
+            # To inspect stack for specific moment
+            if end_condition is not None:
+                if end_condition(finfos):
+                    for i in range(len(stack)-1, -1, -1):
+                        print("{} : {}".format(i, stack[i]))
+                    raise StopParsingData
+
+        def exit(self, tid, ptr):
+            stack = self.get_stack(tid)
+            old_level = len(stack)
+            finfos = get_method_info(ptr)
+            if len(stack) > 0:
+                top_elem = stack.pop()
+                if top_elem == 'u': # unroll
+                    top_elem = stack.pop()
+                    if top_elem != (ptr, finfos):
+                        top_elem = stack.pop()
+                        if top_elem != (ptr, finfos):
+                            remove_stack_until(stack, ptr, finfos)
+                            top_elem = stack.pop()
+                            if top_elem != (ptr, finfos):
+                                print(action)
+                                print(top_elem)
+                                print((ptr, finfos))
+                                raise RuntimeError
+                else:
+                    if top_elem != (ptr, finfos):
+                        remove_stack_until(stack, ptr, finfos)
+                        top_elem = stack.pop()
+                        if top_elem != (ptr, finfos):
+                            print(action)
+                            print(top_elem)
+                            print((ptr, finfos))
+                            raise RuntimeError
+
+            print('%10s %d -> %d Exiting   method 0x%08X %s' % \
+                    (get_thread_name(tid), old_level, len(stack), ptr, '\t'.join(finfos)))
+            pretty_print_stack(stack)
+            print()
+
+        def unroll(self, tid, ptr):
+            stack = self.get_stack(tid)
+            old_level = len(stack)
+            finfos = get_method_info(ptr)
+            while len(stack) > 0 and stack[-1][0] == fptr:
+                stack.pop()
+            stack.append('u')
+
+            print('%10s %d -> %d Unrolling method 0x%08X %s' % \
+                    (get_thread_name(tid), old_level, len(stack), ptr, '\t'.join(finfos)))
+            pretty_print_stack(stack)
+            print()
+
+    mstack = MethodStackPerThread(threads, methods)
+    parse_data(prefix + "data_{}.bin".format(idx), {
+        0: mstack.enter,
+        1: mstack.exit,
+        2: mstack.unroll
+    })
 
 def collapse_reader(fname):
     global_m2c = dict()
@@ -399,8 +509,31 @@ if __name__ == "__main__":
     print_parser = subparsers.add_parser('print')
     print_parser.add_argument('prefix')
 
+    stack_parser = subparsers.add_parser('stack')
+    stack_parser.add_argument('prefix')
+    stack_parser.add_argument('--classname', default=None)
+    stack_parser.add_argument('--methodname', default=None)
+    stack_parser.add_argument('--count', default=1)
+
     args = parser.parse_args()
     if args.func == 'print':
         print_data(args.prefix)
+    elif args.func == 'stack':
+        if args.classname is None and args.methodname is None:
+            raise RuntimeError
+
+        count = 0
+        limit = int(args.count)
+        def end_condition(finfos):
+            global count
+            if len(finfos) > 1 \
+                    and (args.classname is None or finfos[0] == args.classname) \
+                    and (args.methodname is None or finfos[1] == args.methodname):
+                count += 1
+                if count == limit:
+                    return True
+            return False
+
+        inspect_stack(args.prefix, end_condition = end_condition)
     else:
         raise
