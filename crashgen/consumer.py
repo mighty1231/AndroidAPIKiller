@@ -519,9 +519,6 @@ if __name__ == "__main__":
     if args.func == 'print':
         print_data(args.prefix)
     elif args.func == 'stack':
-        if args.classname is None and args.methodname is None:
-            raise RuntimeError
-
         count = 0
         limit = int(args.count)
         def end_condition(finfos):
