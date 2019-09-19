@@ -594,21 +594,29 @@ if __name__ == "__main__":
 
     subparsers = parser.add_subparsers(dest='func')
 
-    print_parser = subparsers.add_parser('print')
+    print_parser = subparsers.add_parser('print',
+        help='Print all log to read')
     print_parser.add_argument('prefix')
 
-    stack_parser = subparsers.add_parser('stack')
+    stack_parser = subparsers.add_parser('stack',
+        help='Print function stack for every method enter/exit')
     stack_parser.add_argument('prefix')
     stack_parser.add_argument('--classname', default=None)
     stack_parser.add_argument('--methodname', default=None)
-    stack_parser.add_argument('--count', default=1)
+    stack_parser.add_argument('--count', default=None)
 
     args = parser.parse_args()
     if args.func == 'print':
         print_data(args.prefix)
     elif args.func == 'stack':
         count = 0
-        limit = int(args.count)
+        if args.count is None:
+            if args.classname == args.methodname == None:
+                limit = -1
+            else:
+                limit = 1
+        else:
+            limit = int(args.count)
         def end_condition(finfos):
             global count
             if len(finfos) > 1 \

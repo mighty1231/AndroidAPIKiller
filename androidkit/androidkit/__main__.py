@@ -1,4 +1,5 @@
 import argparse
+import re, os
 from .avd import get_avd_list, create_avd
 from .emulator import emulator_run_and_wait, emulator_setup
 from .utils import (
@@ -10,7 +11,8 @@ from .utils import (
     get_pids,
     list_snapshots,
     load_snapshot,
-    save_snapshot
+    save_snapshot,
+    run_adb_cmd
 )
 
 parser = argparse.ArgumentParser(description='Tools to manage android devices')
@@ -75,6 +77,13 @@ get_pid_parser = subparsers.add_parser('getpid',
     help='Get PID of running process with specified package')
 get_pid_parser.add_argument('package')
 get_pid_parser.add_argument('--serial', default=None)
+
+pull_parser = subparsers.add_parser('pull',
+    help='Pull files whose name starts with prefix')
+pull_parser.add_argument('prefix',
+    help='Examples: /sdcard/mt_0_ or /data/data/some.app/mt_3_')
+pull_parser.add_argument('--destination', default='.')
+pull_parser.add_argument('--serial', default=None)
 
 def parse_serial(serial):
     try:
@@ -147,5 +156,32 @@ elif args.func == 'getuid':
 elif args.func == 'getpid':
     pids = get_pids(args.package, serial=parse_serial(args.serial))
     print(' '.join(map(str, pids)))
+elif args.func == 'pull':
+    serial = parse_serial(args.serial)
+
+    # list files
+    folder, prefix = os.path.split(args.prefix)
+    out = run_adb_cmd('shell ls {}*'.format(args.prefix),
+            serial=serial)
+    if "No such file or directory" not in out:
+        fnames = []
+        for line in out.split():
+            if line == '':
+                break
+            fnames.append(line.rstrip())
+
+        print("List of files")
+        for fname in fnames:
+            print(' - ' + fname)
+        ret = input("Are you sure to pull these files? [Y/N] ")
+        if ret in ['Y', 'y']:
+            for fname in fnames:
+                run_adb_cmd("pull {} {}".format(fname, args.destination),
+                        serial=serial)
+                print(fname, 'pulled into',
+                      os.path.join(args.destination,
+                                   os.path.split(fname)[1]))
+    else:
+        print("No such file or directory")
 else:
     raise
