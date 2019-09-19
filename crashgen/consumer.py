@@ -3,6 +3,7 @@ import re
 import sys
 import pickle
 import argparse
+import datetime
 
 kMiniTraceMethodEnter = 0x00
 kMiniTraceMethodExit = 0x01
@@ -12,6 +13,10 @@ kMiniTraceFieldWrite = 0x04
 kMiniTraceExceptionCaught = 0x05
 kMiniTraceActionMask = 0x07
 
+def b2u2(buf, idx = 0):
+    assert isinstance(buf, bytes)
+    return buf[idx] + (buf[idx + 1] << 8)
+
 def b2u4(buf, idx = 0):
     assert isinstance(buf, bytes)
     return buf[idx] \
@@ -19,9 +24,16 @@ def b2u4(buf, idx = 0):
         + (buf[idx + 2] << 16) \
         + (buf[idx + 3] << 24)
 
-def b2u2(buf, idx = 0):
+def b2u8(buf, idx = 0):
     assert isinstance(buf, bytes)
-    return buf[idx] + (buf[idx + 1] << 8)
+    return buf[idx] \
+        + (buf[idx + 1] << 8) \
+        + (buf[idx + 2] << 16) \
+        + (buf[idx + 3] << 24) \
+        + (buf[idx + 4] << 32) \
+        + (buf[idx + 5] << 40) \
+        + (buf[idx + 6] << 48) \
+        + (buf[idx + 7] << 56)
 
 def parse_threadinfo(threadinfo_fname):
     threads = dict()
@@ -84,6 +96,32 @@ def parse_data(data_fname, callbacks=[None for _ in range(7)]):
     if isinstance(callbacks, dict):
         callbacks = [callbacks.get(i, None) for i in range(7)]
     with open(data_fname, 'rb') as f:
+        # read header
+        # Header format:
+        # u4  magic ('MiTr')
+        # u2  version
+        # u2  offset to data
+        # u4  log_flag
+        # u8  starting timestamp in milliseconds
+        #     in C:
+        #       gettimeofday(&now, NULL); int64_t timestamp = now.tv_sec * 1000LL + now.tv_usec / 1000;
+        #     in JAVA:
+        #       System.currentTimeMillis();
+        #     interpret in Python:
+        #       datetime.datetime.fromtimestamp(timestamp/1000.0)
+        magic = f.read(4)
+        assert magic == b'MiTr'
+        version = b2u2(f.read(2))
+        offset = b2u2(f.read(2))
+        log_flag = b2u4(f.read(4))
+        timestamp = b2u8(f.read(8))
+
+        assert offset == 20
+        print("MiniTrace Log Version {}".format(version))
+        print("Log with flag {}, timestamp {}".format(
+            hex(log_flag),
+            datetime.datetime.fromtimestamp(timestamp//1000).strftime("%Y/%m/%d %H:%M:%S")))
+
         try:
             while True:
                 tid = f.read(2)
@@ -304,7 +342,7 @@ def print_data(prefix, idx = 0):
 
     get_method_info = lambda ptr:methods[ptr] if ptr in methods else ["method_%08X" % ptr]
     get_field_info = lambda ptr:fields[ptr] if ptr in fields else ["field_%08X" % ptr]
-    get_thread_name = lambda tid:threads[tid] if tid in threads else "Thread-%d" % tid
+    get_thread_name = lambda tid:"%s(%d)" % (threads[tid], tid) if tid in threads else "Thread-%d" % tid
 
     parse_data(prefix + "data_{}.bin".format(idx), [
         lambda tid, ptr: print('%10s Entering  method 0x%08X %s' % \
@@ -329,11 +367,16 @@ def inspect_stack(prefix, idx = 0, end_condition = None):
     methods = parse_methodinfo(prefix + "info_m.log")
 
     get_method_info = lambda ptr:methods[ptr] if ptr in methods else ["method_%08X" % ptr]
-    get_thread_name = lambda tid:threads[tid] if tid in threads else "Thread-%d" % tid
+    get_thread_name = lambda tid:"%s(%d)" % (threads[tid], tid) if tid in threads else "Thread-%d" % tid
 
     def pretty_print_stack(st):
         for i in range(len(st)-1, max(-1, len(st)-7), -1):
-            print("{} : {}".format(i, st[i]))
+            content = st[i]
+            if content == 'u':
+                print("{} : {}".format(i, 'u'))
+            else:
+                ptr, finfos = content
+                print("%d : 0x%08X %s" % (i, ptr, ', '.join(finfos)))
 
     def remove_stack_until(st, fptr, finfos):
         for i in range(len(st)-1, -1, -1):
@@ -391,7 +434,7 @@ def inspect_stack(prefix, idx = 0, end_condition = None):
                             remove_stack_until(stack, ptr, finfos)
                             top_elem = stack.pop()
                             if top_elem != (ptr, finfos):
-                                print(action)
+                                # print(action)
                                 print(top_elem)
                                 print((ptr, finfos))
                                 raise RuntimeError
@@ -400,7 +443,7 @@ def inspect_stack(prefix, idx = 0, end_condition = None):
                         remove_stack_until(stack, ptr, finfos)
                         top_elem = stack.pop()
                         if top_elem != (ptr, finfos):
-                            print(action)
+                            # print(action)
                             print(top_elem)
                             print((ptr, finfos))
                             raise RuntimeError
@@ -414,7 +457,7 @@ def inspect_stack(prefix, idx = 0, end_condition = None):
             stack = self.get_stack(tid)
             old_level = len(stack)
             finfos = get_method_info(ptr)
-            while len(stack) > 0 and stack[-1][0] == fptr:
+            while len(stack) > 0 and stack[-1][0] != ptr:
                 stack.pop()
             stack.append('u')
 
@@ -423,11 +466,16 @@ def inspect_stack(prefix, idx = 0, end_condition = None):
             pretty_print_stack(stack)
             print()
 
+    def msg_callback(tid, content):
+        print("Hooked Message", content)
+        print()
+
     mstack = MethodStackPerThread(threads, methods)
     parse_data(prefix + "data_{}.bin".format(idx), {
         0: mstack.enter,
         1: mstack.exit,
-        2: mstack.unroll
+        2: mstack.unroll,
+        6: msg_callback
     })
 
 def collapse_reader(fname):
