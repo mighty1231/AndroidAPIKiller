@@ -84,7 +84,7 @@ def parse_fieldinfo(fieldinfo_fname):
 class StopParsingData(Exception):
     pass
 
-def parse_data(data_fname, callbacks=[None for _ in range(7)]):
+def parse_data(data_fname, callbacks=[]):
     '''
     Callback for method events 0, 1, 2
         - argument [tid, ptr]
@@ -92,9 +92,18 @@ def parse_data(data_fname, callbacks=[None for _ in range(7)]):
         - argument [tid, ptr, obj, dex]
     Callback for exception / messages 5, 6
         - argument [tid, content_in_string]
+    Callback for idle events 7
+        - argument [datetime_object]
+    Callback for ping events 8
+        - argument [datetime_object]
     '''
     if isinstance(callbacks, dict):
-        callbacks = [callbacks.get(i, None) for i in range(7)]
+        callbacks = [callbacks.get(i, None) for i in range(9)]
+    elif isinstance(callbacks, list):
+        for _ in range(9-len(callbacks)):
+            callbacks.append(None)
+    else:
+        raise RuntimeError
     with open(data_fname, 'rb') as f:
         # read header
         # Header format:
@@ -128,6 +137,24 @@ def parse_data(data_fname, callbacks=[None for _ in range(7)]):
                 if len(tid) < 2:
                     break
                 tid = b2u2(tid)
+                if tid == 0:
+                    # Idle event
+                    value = f.read(8)
+                    if len(value) < 8:
+                        break
+                    if callbacks[7]:
+                        timestamp = b2u8(value)
+                        callbacks[7](timestamp)
+                    continue
+                elif tid == 1:
+                    # Pinging event
+                    value = f.read(8)
+                    if len(value) < 8:
+                        break
+                    if callbacks[8]:
+                        timestamp = b2u8(value)
+                        callbacks[8](timestamp)
+                    continue
                 value = f.read(4)
                 if len(value) < 4:
                     break
@@ -352,13 +379,19 @@ def print_data(prefix, idx = 0):
         lambda tid, ptr: print('%10s Unrolling method 0x%08X %s' % \
                 (get_thread_name(tid), ptr, '\t'.join(get_method_info(ptr)))),
         lambda tid, ptr, obj, dex: print('%10s Reading field 0x%08X object 0x%08X dex 0x%08X %s' % \
-                (get_thread_name(tid), ptr, '\t'.join(get_method_info(ptr)))),
+                (get_thread_name(tid), ptr, obj, dex, '\t'.join(get_field_info(ptr)))),
         lambda tid, ptr, obj, dex: print('%10s Writing field 0x%08X object 0x%08X dex 0x%08X %s' % \
-                (get_thread_name(tid), ptr, '\t'.join(get_method_info(ptr)))),
+                (get_thread_name(tid), ptr, obj, dex, '\t'.join(get_field_info(ptr)))),
         lambda tid, msg: print('%10s ExceptionCaught----\n%s\n----ExceptionCaught' % \
                 (get_thread_name(tid), msg)),
         lambda tid, msg: print('%10s Hooked Message %s' % \
-                (get_thread_name(tid), msg))
+                (get_thread_name(tid), msg)),
+        lambda timestamp: print('Idle Timestamp %s %d' % \
+                (datetime.datetime.fromtimestamp(timestamp//1000).strftime("%Y/%m/%d %H:%M:%S"),
+                 timestamp)),
+        lambda timestamp: print('Ping Timestamp %s %d' % \
+                (datetime.datetime.fromtimestamp(timestamp//1000).strftime("%Y/%m/%d %H:%M:%S"),
+                 timestamp))
     ])
 
 def inspect_stack(prefix, idx = 0, end_condition = None):
@@ -475,7 +508,13 @@ def inspect_stack(prefix, idx = 0, end_condition = None):
         0: mstack.enter,
         1: mstack.exit,
         2: mstack.unroll,
-        6: msg_callback
+        6: msg_callback,
+        7: lambda timestamp: print('Idle Timestamp %s %d' % \
+                (datetime.datetime.fromtimestamp(timestamp//1000).strftime("%Y/%m/%d %H:%M:%S"),
+                 timestamp)),
+        8: lambda timestamp: print('Ping Timestamp %s %d' % \
+                (datetime.datetime.fromtimestamp(timestamp//1000).strftime("%Y/%m/%d %H:%M:%S"),
+                 timestamp))
     })
 
 def collapse_reader(fname):
