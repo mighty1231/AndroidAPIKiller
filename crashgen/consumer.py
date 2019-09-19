@@ -58,10 +58,10 @@ def parse_methodinfo(methodinfo_fname):
             tokens = line.rstrip().split('\t')
             assert len(tokens) == 5, (methodinfo_fname, line)
 
-            method_loc = int(tokens[0], 16)
-            assert method_loc not in methods, (methodinfo_fname, line)
+            method_ptr = int(tokens[0], 16)
+            assert method_ptr not in methods, (methodinfo_fname, line)
 
-            methods[method_loc] = tokens[1:]
+            methods[method_ptr] = tokens[1:]
 
     return methods
 
@@ -72,12 +72,12 @@ def parse_fieldinfo(fieldinfo_fname):
             if line[-1] != '\n':
                 break
             tokens = line.rstrip().split('\t')
-            assert len(tokens) == 4, (fieldinfo_fname, line)
+            assert len(tokens) == 5, (fieldinfo_fname, line)
 
-            tokens_loc = int(tokens[0], 16)
-            assert tokens_loc not in fields, (fieldinfo_fname, line)
+            field_ptr = int(tokens[0], 16)
+            field_det_idx = int(tokens[1])
 
-            fields[tokens_loc] = tokens[1:]
+            fields[(field_ptr, field_det_idx)] = tokens[2:]
 
     return fields
 
@@ -89,7 +89,7 @@ def parse_data(data_fname, callbacks=[]):
     Callback for method events 0, 1, 2
         - argument [tid, ptr]
     Callback for field events 3, 4
-        - argument [tid, ptr, obj, dex]
+        - argument [tid, ptr, obj, dex, detail_idx]
     Callback for exception / messages 5, 6
         - argument [tid, content_in_string]
     Callback for idle events 7
@@ -166,13 +166,14 @@ def parse_data(data_fname, callbacks=[]):
                     if callbacks[action]:
                         callbacks[action](tid, value)
                 elif action <= 4: # field event
-                    extra_data = f.read(8)
-                    if len(extra_data) != 8:
+                    extra_data = f.read(10)
+                    if len(extra_data) != 10:
                         break
                     if callbacks[action]:
                         obj = b2u4(extra_data, 0)
                         dex = b2u4(extra_data, 4)
-                        callbacks[action](tid, value, obj, dex)
+                        detail_idx = b2u2(extra_data, 8)
+                        callbacks[action](tid, value, obj, dex, detail_idx)
                 elif action <= 6: # exception / message
                     length = (value >> 3) - 6
                     buf = f.read(length)
@@ -368,7 +369,7 @@ def print_data(prefix, idx = 0):
     fields = parse_fieldinfo(prefix + "info_f.log")
 
     get_method_info = lambda ptr:methods[ptr] if ptr in methods else ["method_%08X" % ptr]
-    get_field_info = lambda ptr:fields[ptr] if ptr in fields else ["field_%08X" % ptr]
+    get_field_info = lambda ptr, detidx:fields[ptr, detidx] if (ptr, detidx) in fields else ["field_%08X" % ptr]
     get_thread_name = lambda tid:"%s(%d)" % (threads[tid], tid) if tid in threads else "Thread-%d" % tid
 
     parse_data(prefix + "data_{}.bin".format(idx), [
@@ -378,10 +379,10 @@ def print_data(prefix, idx = 0):
                 (get_thread_name(tid), ptr, '\t'.join(get_method_info(ptr)))),
         lambda tid, ptr: print('%10s Unrolling method 0x%08X %s' % \
                 (get_thread_name(tid), ptr, '\t'.join(get_method_info(ptr)))),
-        lambda tid, ptr, obj, dex: print('%10s Reading field 0x%08X object 0x%08X dex 0x%08X %s' % \
-                (get_thread_name(tid), ptr, obj, dex, '\t'.join(get_field_info(ptr)))),
-        lambda tid, ptr, obj, dex: print('%10s Writing field 0x%08X object 0x%08X dex 0x%08X %s' % \
-                (get_thread_name(tid), ptr, obj, dex, '\t'.join(get_field_info(ptr)))),
+        lambda tid, ptr, obj, dex, detidx: print('%10s Reading field 0x%08X object 0x%08X dex 0x%08X %s' % \
+                (get_thread_name(tid), ptr, obj, dex, '\t'.join(get_field_info(ptr, detidx)))),
+        lambda tid, ptr, obj, dex, detidx: print('%10s Writing field 0x%08X object 0x%08X dex 0x%08X %s' % \
+                (get_thread_name(tid), ptr, obj, dex, '\t'.join(get_field_info(ptr, detidx)))),
         lambda tid, msg: print('%10s ExceptionCaught----\n%s\n----ExceptionCaught' % \
                 (get_thread_name(tid), msg)),
         lambda tid, msg: print('%10s Hooked Message %s' % \
