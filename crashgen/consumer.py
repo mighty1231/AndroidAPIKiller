@@ -100,7 +100,7 @@ def parse_data(data_fname, callbacks=[]):
     if isinstance(callbacks, dict):
         callbacks = [callbacks.get(i, None) for i in range(9)]
     elif isinstance(callbacks, list):
-        for _ in range(9-len(callbacks)):
+        for _ in range(10-len(callbacks)):
             callbacks.append(None)
     else:
         raise RuntimeError
@@ -155,6 +155,15 @@ def parse_data(data_fname, callbacks=[]):
                         timestamp = b2u8(value)
                         callbacks[8](timestamp)
                     continue
+                elif tid == 2:
+                    value = f.read(4)
+                    if len(value) < 4:
+                        break
+                    if callbacks[9]:
+                        tid = b2u4(value)
+                        callbacks[9](value)
+                    continue
+
                 value = f.read(4)
                 if len(value) < 4:
                     break
@@ -392,10 +401,11 @@ def print_data(prefix, idx = 0):
                  timestamp)),
         lambda timestamp: print('Ping Timestamp %s %d' % \
                 (datetime.datetime.fromtimestamp(timestamp//1000).strftime("%Y/%m/%d %H:%M:%S"),
-                 timestamp))
+                 timestamp)),
+        lambda tid: print('Thread tid=%d was terminated' % tid)
     ])
 
-def inspect_stack(prefix, idx = 0, end_condition = None):
+def inspect_stack(prefix, idx = 0, stack_depth = -1, end_condition = None):
     # See method stack with specific moment
     threads = parse_threadinfo(prefix + "info_t.log")
     methods = parse_methodinfo(prefix + "info_m.log")
@@ -403,8 +413,10 @@ def inspect_stack(prefix, idx = 0, end_condition = None):
     get_method_info = lambda ptr:methods[ptr] if ptr in methods else ["method_%08X" % ptr]
     get_thread_name = lambda tid:"%s(%d)" % (threads[tid], tid) if tid in threads else "Thread-%d" % tid
 
+    stack_depth_func = lambda st:len(st) - stack_depth if stack_depth > 0 else -1
+
     def pretty_print_stack(st):
-        for i in range(len(st)-1, max(-1, len(st)-7), -1):
+        for i in range(len(st)-1, max(-1, stack_depth_func(st)), -1):
             content = st[i]
             if content == 'u':
                 print("{} : {}".format(i, 'u'))
@@ -604,6 +616,7 @@ if __name__ == "__main__":
     stack_parser.add_argument('--classname', default=None)
     stack_parser.add_argument('--methodname', default=None)
     stack_parser.add_argument('--count', default=None)
+    stack_parser.add_argument('--depth', default='7')
 
     args = parser.parse_args()
     if args.func == 'print':
@@ -617,6 +630,7 @@ if __name__ == "__main__":
                 limit = 1
         else:
             limit = int(args.count)
+        depth = int(args.depth)
         def end_condition(finfos):
             global count
             if len(finfos) > 1 \
@@ -627,6 +641,6 @@ if __name__ == "__main__":
                     return True
             return False
 
-        inspect_stack(args.prefix, end_condition = end_condition)
+        inspect_stack(args.prefix, stack_depth = depth, end_condition = end_condition)
     else:
         raise
