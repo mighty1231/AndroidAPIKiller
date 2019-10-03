@@ -161,7 +161,7 @@ def parse_data(data_fname, callbacks=[]):
                         break
                     if callbacks[9]:
                         tid = b2u4(value)
-                        callbacks[9](value)
+                        callbacks[9](tid)
                     continue
 
                 value = f.read(4)
@@ -190,7 +190,11 @@ def parse_data(data_fname, callbacks=[]):
                         break
                     if callbacks[action]:
                         # ended with null character
-                        callbacks[action](tid, buf[:-1].decode())
+                        try:
+                            callbacks[action](tid, buf[:-1].decode())
+                        except UnicodeDecodeError:
+                            print("Failed to decode ->", buf[:min(len(buf)-1, 100)], file=sys.stderr)
+                            raise
                 else:
                     raise RuntimeError
 
@@ -394,7 +398,7 @@ def print_data(prefix, idx = 0):
                 (get_thread_name(tid), ptr, obj, dex, '\t'.join(get_field_info(ptr, detidx)))),
         lambda tid, msg: print('%10s ExceptionCaught----\n%s\n----ExceptionCaught' % \
                 (get_thread_name(tid), msg)),
-        lambda tid, msg: print('%10s Hooked Message %s' % \
+        lambda tid, msg: print('%10s Dispatched Message %s' % \
                 (get_thread_name(tid), msg)),
         lambda timestamp: print('Idle Timestamp %s %d' % \
                 (datetime.datetime.fromtimestamp(timestamp//1000).strftime("%Y/%m/%d %H:%M:%S"),
@@ -402,7 +406,7 @@ def print_data(prefix, idx = 0):
         lambda timestamp: print('Ping Timestamp %s %d' % \
                 (datetime.datetime.fromtimestamp(timestamp//1000).strftime("%Y/%m/%d %H:%M:%S"),
                  timestamp)),
-        lambda tid: print('Thread tid=%d was terminated' % tid)
+        lambda tid: print('Thread %s(%d) was terminated' % (get_thread_name(tid), tid))
     ])
 
 def inspect_stack(prefix, idx = 0, stack_depth = -1, end_condition = None):
@@ -512,16 +516,13 @@ def inspect_stack(prefix, idx = 0, stack_depth = -1, end_condition = None):
             pretty_print_stack(stack)
             print()
 
-    def msg_callback(tid, content):
-        print("Hooked Message", content)
-        print()
-
     mstack = MethodStackPerThread(threads, methods)
     parse_data(prefix + "data_{}.bin".format(idx), {
         0: mstack.enter,
         1: mstack.exit,
         2: mstack.unroll,
-        6: msg_callback,
+        6: lambda tid, msg: print('%10s Dispatched Message %s' % \
+                (get_thread_name(tid), msg)),
         7: lambda timestamp: print('Idle Timestamp %s %d' % \
                 (datetime.datetime.fromtimestamp(timestamp//1000).strftime("%Y/%m/%d %H:%M:%S"),
                  timestamp)),
