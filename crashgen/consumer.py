@@ -48,22 +48,46 @@ def parse_threadinfo(threadinfo_fname):
 
     return threads
 
+class Methods:
+    def __init__(self, methodinfo_fname):
+        # ptr -> [classname, methodname, signature, sourcefile]
+        methods = dict()
+        with open(methodinfo_fname, 'rt') as f:
+            for line in f:
+                if line[-1] != '\n':
+                    break
+                tokens = line.rstrip().split('\t')
+                assert len(tokens) == 5, (methodinfo_fname, line)
+
+                method_ptr = int(tokens[0], 16)
+                assert method_ptr not in methods, (methodinfo_fname, line)
+
+                methods[method_ptr] = tokens[1:]
+
+        self.methods = methods
+
+    def __getitem__(self, *args):
+        return self.methods.__getitem__(*args)
+
+    def __setitem__(self, *args):
+        self.methods.__setitem__(*args)
+
+    def __contains__(self, *args):
+        return self.methods.__contains__(*args)
+
+    def __iter__(self, *args):
+        return self.methods.__iter__(*args)
+
+    def find_method_ptr(self, classname, methodname, signature=None):
+        for ptr in self.methods:
+            c, m, sig, sf = self.methods[ptr]
+            if c == classname and m == methodname and (signature == None or sig == signature):
+                return ptr
+
+        raise KeyError
+
 def parse_methodinfo(methodinfo_fname):
-    # ptr -> [classname, methodname, signature, sourcefile]
-    methods = dict()
-    with open(methodinfo_fname, 'rt') as f:
-        for line in f:
-            if line[-1] != '\n':
-                break
-            tokens = line.rstrip().split('\t')
-            assert len(tokens) == 5, (methodinfo_fname, line)
-
-            method_ptr = int(tokens[0], 16)
-            assert method_ptr not in methods, (methodinfo_fname, line)
-
-            methods[method_ptr] = tokens[1:]
-
-    return methods
+    return Methods(methodinfo_fname)
 
 def parse_fieldinfo(fieldinfo_fname):
     fields = dict()
@@ -98,7 +122,7 @@ def parse_data(data_fname, callbacks=[]):
         - argument [datetime_object]
     '''
     if isinstance(callbacks, dict):
-        callbacks = [callbacks.get(i, None) for i in range(9)]
+        callbacks = [callbacks.get(i, None) for i in range(10)]
     elif isinstance(callbacks, list):
         for _ in range(10-len(callbacks)):
             callbacks.append(None)
@@ -602,6 +626,104 @@ def collapse_directory():
             for mtdkey in sorted(thread_total_counts[thread].keys(), key=lambda k:-thread_total_counts[thread][k]):
                 f.write('{}\t{}\n'.format(thread_total_counts[thread][mtdkey], '\t'.join(mtdkey)))
 
+def collapse_per_message_2(prefix):
+    # See method stack with specific moment
+    threads = parse_threadinfo(prefix + "info_t.log")
+    methods = parse_methodinfo(prefix + "info_m.log")
+
+    get_method_info = lambda ptr:methods[ptr] if ptr in methods else ["method_%08X" % ptr]
+    get_thread_name = lambda tid:"%s(%d)" % (threads[tid], tid) if tid in threads else "Thread-%d" % tid
+
+    main_tid = min(threads.keys())   
+    dispatchMessage_ptr = methods.find_method_ptr("Landroid/os/Handler;", "dispatchMessage")
+    # Assume only non-basic, non-app methods are logged
+    class MsgCollapser:
+        def __init__(self):
+            self.cur_message_name = None
+            self.mtds_per_message = dict() # per message
+
+            self.cur_idle_idx = 0
+            self.mtds_per_idle = dict() # per idle
+            self.msgs_per_idle = []
+
+        def enter(self, tid, ptr):
+            if tid == main_tid:
+                if self.cur_message_name is not None:
+                    try:
+                        self.mtds_per_message[ptr] += 1
+                    except KeyError:
+                        self.mtds_per_message[ptr] = 1
+
+            try:
+                self.mtds_per_idle[ptr] += 1
+            except KeyError:
+                self.mtds_per_idle[ptr] = 1
+
+        def exit(self, tid, ptr):
+            if ptr == dispatchMessage_ptr:
+                # flush main functions
+                print('[Message %s]' % self.cur_message_name)
+                for ptr in sorted(self.mtds_per_message, key=lambda ptr:-self.mtds_per_message[ptr]):
+                    print('0x%08X\t%d\t%s' % (
+                        ptr,
+                        self.mtds_per_message[ptr],
+                        '\t'.join(get_method_info(ptr))))
+                self.mtds_per_message.clear()
+                self.cur_message_name = None
+
+        def unroll(self, tid, ptr):
+            # self.exit(tid, ptr)
+            assert ptr != dispatchMessage_ptr
+
+        # this is called by just below the entering dispatchMessage event
+        def message_dispatched(self, tid, msg):
+            # flush buffer out
+            assert self.mtds_per_message == dict() and self.cur_message_name is None
+            self.cur_message_name = msg
+            self.msgs_per_idle.append(msg)
+
+        def idle(self, timestamp):
+            # flush mtds_per_idle
+            print('[Idle id=%d] %s %d' % (
+                self.cur_idle_idx,
+                datetime.datetime.fromtimestamp(timestamp//1000).strftime("%Y/%m/%d %H:%M:%S"),
+                timestamp))
+
+            print('[Idle id=%d] Executed messages' % self.cur_idle_idx)
+            for msg in self.msgs_per_idle:
+                print(msg)
+
+            for ptr in sorted(self.mtds_per_idle, key=lambda ptr:-self.mtds_per_idle[ptr]):
+                print('0x%08X\t%d\t%s' %
+                    (ptr,
+                     self.mtds_per_idle[ptr],
+                     '\t'.join(get_method_info(ptr))))
+
+            self.mtds_per_idle.clear()
+            self.msgs_per_idle.clear()
+            self.cur_idle_idx += 1
+
+    collapser = MsgCollapser()
+
+    idx = 0
+    bin_name = prefix + "data_{}.bin".format(idx)
+    done_names = []
+    while os.path.isfile(bin_name):
+        parse_data(bin_name, {
+            0: collapser.enter,
+            1: collapser.exit,
+            2: collapser.unroll,
+            6: collapser.message_dispatched,
+            7: collapser.idle
+        })
+        done_names.append(bin_name)
+
+        idx += 1
+        bin_name = prefix + "data_{}.bin".format(idx)
+
+    print('Collapsing files done: ', done_names)
+    # os.remove()
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Manager for logs from MiniTrace')
 
@@ -618,6 +740,10 @@ if __name__ == "__main__":
     stack_parser.add_argument('--methodname', default=None)
     stack_parser.add_argument('--count', default=None)
     stack_parser.add_argument('--depth', default='7')
+
+    collapse_parser = subparsers.add_parser('collapse',
+        help='Collapse MiniTrace logs')
+    collapse_parser.add_argument('prefix')
 
     args = parser.parse_args()
     if args.func == 'print':
@@ -643,5 +769,7 @@ if __name__ == "__main__":
             return False
 
         inspect_stack(args.prefix, stack_depth = depth, end_condition = end_condition)
+    elif args.func == 'collapse':
+        collapse_per_message_2(args.prefix)
     else:
         raise
