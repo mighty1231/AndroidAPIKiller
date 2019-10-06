@@ -632,9 +632,8 @@ def collapse_per_message_2(prefix):
     methods = parse_methodinfo(prefix + "info_m.log")
 
     get_method_info = lambda ptr:methods[ptr] if ptr in methods else ["method_%08X" % ptr]
-    get_thread_name = lambda tid:"%s(%d)" % (threads[tid], tid) if tid in threads else "Thread-%d" % tid
 
-    main_tid = min(threads.keys())   
+    main_tid = min(threads.keys())
     dispatchMessage_ptr = methods.find_method_ptr("Landroid/os/Handler;", "dispatchMessage")
     # Assume only non-basic, non-app methods are logged
     class MsgCollapser:
@@ -724,6 +723,136 @@ def collapse_per_message_2(prefix):
     print('Collapsing files done: ', done_names)
     # os.remove()
 
+def collapse_per_message_binary(prefix):
+    # See method stack with specific moment
+    threads = parse_threadinfo(prefix + "info_t.log")
+    methods = parse_methodinfo(prefix + "info_m.log")
+
+    main_tid = min(threads.keys())
+    dispatchMessage_ptr = methods.find_method_ptr("Landroid/os/Handler;", "dispatchMessage")
+    '''
+    messages.pickle = dict: msgid -> message_name
+    mtds_per_message.pickle = dict: msgid -> {invoked_methods -> entered_count}
+    idle_infos.pickle = list of tuple: (timestamp, list: messages, dict: {invoked_methods -> entered_count})
+    '''
+    # Assume only non-basic, non-app methods are logged
+    class MsgCollapser:
+        def __init__(self):
+            self.messages = dict()
+            self.cur_msg_id = -1
+            self.mtds_per_message = dict() # per message
+
+            self.idle_infos = []
+            self.cur_msgs_per_idle = []
+            self.cur_mtds_per_idle = dict()
+
+        # this is called by just below the entering dispatchMessage event
+        # msg starts with [id ##]
+        def message_dispatched(self, tid, msg):
+            assert self.cur_msg_id == -1
+            self.cur_msg_id = int(msg[4:msg.index(']')])
+            self.messages[self.cur_msg_id] = msg
+            self.cur_msgs_per_idle.append(msg)
+            self.mtds_per_message[self.cur_msg_id] = dict()
+
+        def enter(self, tid, ptr):
+            if tid == main_tid:
+                if self.cur_msg_id != -1:
+                    try:
+                        self.mtds_per_message[self.cur_msg_id][ptr] += 1
+                    except KeyError:
+                        self.mtds_per_message[self.cur_msg_id][ptr] = 1
+
+            try:
+                self.cur_mtds_per_idle[ptr] += 1
+            except KeyError:
+                self.cur_mtds_per_idle[ptr] = 1
+
+        def exit(self, tid, ptr):
+            if ptr == dispatchMessage_ptr:
+                self.cur_msg_id = -1
+
+        def unroll(self, tid, ptr):
+            # self.exit(tid, ptr)
+            assert ptr != dispatchMessage_ptr
+
+        def idle(self, timestamp):
+            self.idle_infos.append((
+                timestamp,
+                self.cur_msgs_per_idle,
+                self.cur_mtds_per_idle
+            ))
+
+            self.cur_msgs_per_idle = []
+            self.cur_mtds_per_idle = dict()
+
+        def make_pickle(self, messages_fname, mtds_per_message_fname, idle_infos_fname):
+            with open(messages_fname, 'wb') as pkfile:
+                pickle.dump(self.messages, pkfile)
+            with open(mtds_per_message_fname, 'wb') as pkfile:
+                pickle.dump(self.mtds_per_message, pkfile)
+            with open(idle_infos_fname, 'wb') as pkfile:
+                pickle.dump(self.idle_infos, pkfile)
+
+    collapser = MsgCollapser()
+
+    idx = 0
+    bin_name = prefix + "data_{}.bin".format(idx)
+    done_names = []
+    while os.path.isfile(bin_name):
+        parse_data(bin_name, {
+            0: collapser.enter,
+            1: collapser.exit,
+            2: collapser.unroll,
+            6: collapser.message_dispatched,
+            7: collapser.idle
+        })
+        done_names.append(bin_name)
+
+        idx += 1
+        bin_name = prefix + "data_{}.bin".format(idx)
+
+    print('Collapsing files done: ', done_names)
+    # os.remove()
+    collapser.make_pickle(prefix + "col_msgs.pk", prefix + "col_mpm.pk", prefix + "col_idle.pk")
+
+def analyze_collapsed_pickle(prefix):
+    with open(prefix + "col_msgs.pk", 'rb') as pkfile:
+        messages = pickle.load(pkfile)
+    with open(prefix + "col_mpm.pk", 'rb') as pkfile:
+        mtds_per_message = pickle.load(pkfile)
+    with open(prefix + "col_idle.pk", 'rb') as pkfile:
+        idle_infos = pickle.load(pkfile)
+    methods = parse_methodinfo(prefix + "info_m.log")
+    get_method_info = lambda ptr:methods[ptr] if ptr in methods else ["method_%08X" % ptr]
+
+    for msgid in sorted(messages.keys()):
+        print('[Message] {}'.format(messages[msgid]))
+        for ptr in sorted(mtds_per_message[msgid], key=lambda ptr:-mtds_per_message[msgid][ptr]):
+            print('0x%08X\t%d\t%s' % (
+                ptr,
+                mtds_per_message[msgid][ptr],
+                '\t'.join(get_method_info(ptr))))
+
+    print('---------------------------------------------')
+
+    # flush mtds_per_idle
+    for timestamp, msgs, mtds in idle_infos:
+        print('[Idle %d %s]' % (
+            timestamp,
+            datetime.datetime.fromtimestamp(timestamp//1000).strftime("%Y/%m/%d %H:%M:%S")))
+
+        print('[Idle] Dispatched messages')
+        for msg in msgs:
+            print(msg)
+
+        print('[Idle] Executed methods')
+        for ptr in sorted(mtds, key=lambda ptr:-mtds[ptr]):
+            print('0x%08X\t%d\t%s' %
+                (ptr,
+                 mtds[ptr],
+                 '\t'.join(get_method_info(ptr))))
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Manager for logs from MiniTrace')
 
@@ -744,6 +873,10 @@ if __name__ == "__main__":
     collapse_parser = subparsers.add_parser('collapse',
         help='Collapse MiniTrace logs')
     collapse_parser.add_argument('prefix')
+
+    collapse_analyzer_parser = subparsers.add_parser('analyze',
+        help='Analyze collapsed data')
+    collapse_analyzer_parser.add_argument('prefix')
 
     args = parser.parse_args()
     if args.func == 'print':
@@ -771,5 +904,7 @@ if __name__ == "__main__":
         inspect_stack(args.prefix, stack_depth = depth, end_condition = end_condition)
     elif args.func == 'collapse':
         collapse_per_message_2(args.prefix)
+    elif args.func == 'analyze':
+        analyze_collapsed_pickle(args.prefix)
     else:
         raise

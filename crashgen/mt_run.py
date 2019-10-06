@@ -6,6 +6,8 @@ from androidkit import (
     get_pids,
     run_adb_cmd,
     AdbOfflineError,
+    get_multiprocessing_mode,
+    set_multiprocessing_mode,
     unset_multiprocessing_mode,
     RunCmdError
 )
@@ -13,6 +15,7 @@ from androidkit import (
 STATE_CONSTRUCTED = 0
 STATE_RUNNING = 1
 
+TAG = '[MTSERVER]'
 class WrongConnectionState(Exception):
     pass
 
@@ -42,7 +45,7 @@ class Connections:
         if state != STATE_CONSTRUCTED:
             raise WrongConnectionState
         self.connections[socketfd] = (STATE_RUNNING, (pid, prefix))
-        print('CONNECTION: new connection, pid', pid, 'prefix', prefix)
+        print('{} new connection, pid {} prefix {}'.format(TAG, pid, prefix))
 
     def release_file(self, socketfd, fname):
         # This part could be called with gentle termination of the app (not SIGKILL)
@@ -53,7 +56,7 @@ class Connections:
         if state != STATE_RUNNING:
             raise WrongConnectionState
 
-        print("CONNECTION: release file {}".format(fname))
+        print("{} release file {}".format(TAG, fname))
         run_adb_cmd("pull {} {}".format(fname, self.output_folder),
                 serial=self.serial)
         run_adb_cmd("shell rm {}".format(fname),
@@ -71,7 +74,7 @@ class Connections:
             prefix_local = os.path.join(self.output_folder, os.path.split(prefix)[1])
 
             # clean up given prefix
-            print("CONNECTION: close connection on {}".format(prefix_local))
+            print("{} close connection on {}".format(TAG, prefix_local))
             out = run_adb_cmd('shell ls {}*'.format(prefix),
                     serial=self.serial)
             if "No such file or directory" not in out:
@@ -80,7 +83,7 @@ class Connections:
                     if line == '':
                         break
                     fname = line.rstrip()
-                    print("CONNECTION: - pull and remove {}".format(fname))
+                    print("{} - pull and remove {}".format(TAG, fname))
                     try:
                         run_adb_cmd("pull {} {}".format(fname, self.output_folder),
                                 serial=self.serial)
@@ -89,7 +92,7 @@ class Connections:
                                 os.path.split(fname)[1]))
                     except RunCmdError as e:
                         # @TODO How could it be happen?
-                        print("CONNECTION: - failed to pull and remove {}".format(fname), file=sys.stderr)
+                        print("{} - failed to pull and remove {}".format(TAG, fname), file=sys.stderr)
                         for file in pulled_files:
                             os.remove(file)
                         prefix_local = ""
@@ -101,13 +104,14 @@ class Connections:
         else:
             raise WrongConnectionState
 
-    def clean_up(self):
+    def clean_up(self, reason):
         if self._clean_up:
             return False
+        previous_mp_mode = get_multiprocessing_mode()
         unset_multiprocessing_mode()
         self._clean_up = True
 
-        print('CONNECTION: cleaning connections...')
+        print('{} cleaning connections in [{}]'.format(TAG, reason))
         kill_mtserver(self.serial)
         while self.connections:
             socketfd, (state, data) = next(iter(self.connections.items()))
@@ -119,23 +123,25 @@ class Connections:
             pid, prefix = data
             self.close_connection(socketfd, prefix)
 
-        print('----- Start of the stdout log -----')
+        print('{} Start of the stdout log in [{}]'.format(TAG, reason))
         for l in self.log:
-            print(l)
-        print('----- Start of the stderr log -----')
+            print('{} {}'.format(TAG, l))
+        print('{} Start of the stderr log in [{}]'.format(TAG, reason))
         for l in self.errlog:
-            print(l)
-        print('----- END of the log -----')
+            print('{} {}'.format(TAG, l))
+        print('{} END of the log in [{}]'.format(TAG, reason))
 
+        if previous_mp_mode:
+            set_multiprocessing_mode()
         return True
 
     def stdout_callback(self, line):
         self.log.append(line)
         if line.startswith('Server with uid'):
-            print("CONNECTION: mtserver started")
+            print("{} mtserver started".format(TAG))
             return
         if 'Connection attempt!' in line:
-            print("CONNECTION: Connection attempt!")
+            print("{} Connection attempt!".format(TAG))
             return
 
         match = re.match(r'\[Socket ([0-9]+)\] Connection with pid ([0-9]+) from Start\(\)',
@@ -160,11 +166,11 @@ class Connections:
 
         match = re.match(r'\[Socket ([0-9]+)\] Connection closed, prefix=(.*)', line)
         if match is not None:
-            socketfd, prefix = match.group(2)
+            socketfd, prefix = match.groups()
             self.close_connection(int(socketfd), prefix)
             return
 
-        print("CONNECTION: Warning, Unexpected line", line)
+        print("{} Warning, Unexpected line {}".format(TAG, line))
 
     def stderr_callback(self, line):
         self.log.append(line)
@@ -180,26 +186,26 @@ def run_mtserver(package_name, output_folder, serial=None):
 
     kill_mtserver(serial)
     try:
-        print('Start mtserver...')
+        print('{} Start mtserver...'.format(TAG))
         out = run_adb_cmd('shell /data/local/tmp/mtserver server {}'  \
                 .format(package_name),
             stdout_callback = connections.stdout_callback,
             stderr_callback = connections.stderr_callback,
             serial=serial)
     except WrongConnectionState:
-        print('CONNECTION: WrongConnectionState. Check follow log...')
+        print('{} WrongConnectionState. Check follow log...'.format(TAG))
         for line in connections.log:
-            print(line)
+            print('{} {}'.format(TAG, line))
 
         kill_mtserver(serial)
     except KeyboardInterrupt:
-        connections.clean_up()
+        connections.clean_up('KeyboardInterrupt')
         raise
-    except Exception:
-        connections.clean_up()
+    except Exception as e:
+        connections.clean_up('Exception {}'.format(e))
         raise
 
-    connections.clean_up()
+    connections.clean_up('Normal run_mtserver')
 
 if __name__ == "__main__":
     run_mtserver('com.hoi.simpleapp22', 'temp')

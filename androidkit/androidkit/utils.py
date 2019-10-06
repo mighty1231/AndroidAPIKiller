@@ -16,6 +16,10 @@ def unset_multiprocessing_mode():
     global _adb_mp_delay
     _adb_mp_delay = False
 
+def get_multiprocessing_mode():
+    global _adb_mp_delay
+    return _adb_mp_delay
+
 class AdbLongProcessBreak(Exception):
     pass
 

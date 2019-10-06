@@ -4,6 +4,7 @@ from androidkit import (
     run_adb_cmd,
     get_package_name,
     set_multiprocessing_mode,
+    unset_multiprocessing_mode,
     get_avd_list,
     list_snapshots,
     load_snapshot,
@@ -22,7 +23,7 @@ from mt_run import Connections, kill_mtserver, WrongConnectionState
 from ape_runner import fetch_result
 
 # compress files with thread
-from consumer import collapse_per_message
+from consumer import collapse_per_message_binary
 import threading
 
 ART_APE_MT_READY_SS = "ART_APE_MT" # snapshot name
@@ -100,14 +101,14 @@ class ConnectionsWithValue(Connections):
     def close_connection(self, socketfd, prefix):
         prefix_local = super(ConnectionsWithValue, self).close_connection(socketfd, prefix)
         if prefix_local != '':
-            thread = threading.Thread(target=collapse_per_message,
+            thread = threading.Thread(target=collapse_per_message_binary,
                 args=(prefix_local, ))
             thread.start()
             self._threads.append(thread)
 
-    def clean_up(self):
+    def clean_up(self, reason):
         print('Waiting for collapsing threads')
-        if super(ConnectionsWithValue, self).clean_up():
+        if super(ConnectionsWithValue, self).clean_up(reason):
             for thread in self._threads:
                 thread.join()
 
@@ -129,19 +130,19 @@ def mt_task(package_name, output_folder, serial, logging_flag, mt_is_running):
 
         kill_mtserver(serial)
     except KeyboardInterrupt:
-        connections.clean_up()
+        connections.clean_up("KeyboardInterrupt")
         raise
-    except Exception:
-        connections.clean_up()
+    except Exception as e:
+        connections.clean_up("Exception " + repr(e))
         raise
-    connections.clean_up()
+    connections.clean_up("Normal")
 
 
 def ape_task(avd_name, serial, package_name, output_dir, running_minutes, mt_is_running):
     while mt_is_running.value == 0:
         time.sleep(1)
     print('ape_task(): Emulator[{}, {}] Running APE with package {}'.format(avd_name, serial, package_name))
-    args = '-p {} --running-minutes {} --ape sata'.format(package_name, running_minutes)
+    args = '-p {} --running-minutes {} --mt --ape sata'.format(package_name, running_minutes)
     ret = run_adb_cmd('shell CLASSPATH={} {} {} {} {}'.format(
         os.path.join(TMP_LOCATION, 'ape.jar'),
         '/system/bin/app_process',
@@ -157,8 +158,9 @@ def run_ape_with_mt(apk_path, avd_name, libart_path, ape_jar_path, mtserver_path
     package_name = get_package_name(apk_path)
     print('run_ape_with_mt(): given apk_path {} avd_name {}'.format(apk_path, avd_name))
 
-    assert os.path.split(libart_path)[1] in ['libart.so', 'libart_api.so']
+    assert os.path.split(libart_path)[1] == 'libart.so'
     assert os.path.split(mtserver_path)[1] == 'mtserver'
+    assert os.path.split(ape_jar_path)[1] == 'ape.jar'
 
     avd = install_art_ape_mt(avd_name, libart_path, ape_jar_path, mtserver_path)
 
@@ -171,7 +173,7 @@ def run_ape_with_mt(apk_path, avd_name, libart_path, ape_jar_path, mtserver_path
 
     mt_is_running = Value('i', 0)
     mtserver_proc = mp.Process(target=mt_task,
-        args=(package_name, mt_output_folder, avd.serial, "1", mt_is_running))
+        args=(package_name, mt_output_folder, avd.serial, "20010107", mt_is_running))
     apetask_proc = mp.Process(target=ape_task,
         args=(avd_name, avd.serial, package_name, ape_output_folder, running_minutes, mt_is_running))
 
@@ -181,6 +183,7 @@ def run_ape_with_mt(apk_path, avd_name, libart_path, ape_jar_path, mtserver_path
 
     kill_mtserver(serial = avd.serial)
     mtserver_proc.join()
+    unset_multiprocessing_mode()
 
 if __name__ == "__main__":
     import argparse
@@ -188,9 +191,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Runner of APE with MiniTracing')
     parser.add_argument('apk_list_file')
     parser.add_argument('avd_name')
-    parser.add_argument('libart_path')
-    parser.add_argument('ape_jar_path')
-    parser.add_argument('mtserver_path')
+    parser.add_argument('--libart_path', default='../bin/libart.so')
+    parser.add_argument('--ape_jar_path', default='../bin/ape.jar')
+    parser.add_argument('--mtserver_path', default='../bin/mtserver')
     parser.add_argument('--running_minutes', default='20')
     parser.add_argument('--ape_output_folder', default='{dirname}/ape_output')
     parser.add_argument('--mt_output_folder', default='{dirname}/mt_output')
