@@ -143,13 +143,17 @@ def ape_task(avd_name, serial, package_name, output_dir, running_minutes, mt_is_
         time.sleep(1)
     print('ape_task(): Emulator[{}, {}] Running APE with package {}'.format(avd_name, serial, package_name))
     args = '-p {} --running-minutes {} --mt --ape sata'.format(package_name, running_minutes)
-    ret = run_adb_cmd('shell CLASSPATH={} {} {} {} {}'.format(
-        os.path.join(TMP_LOCATION, 'ape.jar'),
-        '/system/bin/app_process',
-        TMP_LOCATION,
-        'com.android.commands.monkey.Monkey',
-        args
-    ), serial=serial)
+    with open(os.path.join(output_dir, 'ape_stdout_stderr.txt'), 'wt') as f:
+        ret = run_adb_cmd('shell CLASSPATH={} {} {} {} {}'.format(
+                os.path.join(TMP_LOCATION, 'ape.jar'),
+                '/system/bin/app_process',
+                TMP_LOCATION,
+                'com.android.commands.monkey.Monkey',
+                args),
+            stdout_callback = lambda t:f.write(t + '\n'),
+            stderr_callback = lambda t:f.write(t + '\n'),
+            serial = serial,
+        )
 
     fetch_result(output_dir, serial)
 
