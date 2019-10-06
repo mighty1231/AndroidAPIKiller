@@ -17,7 +17,7 @@ from androidkit import (
 )
 
 import time
-import multiprocessing as mp
+import threading
 from multiprocessing.sharedctypes import Value
 from mt_run import Connections, kill_mtserver, WrongConnectionState
 from ape_runner import fetch_result
@@ -25,6 +25,7 @@ from ape_runner import fetch_result
 # compress files with thread
 from consumer import collapse_per_message_binary
 import threading
+from logcat_catcher import generate_catcher_thread, kill_generated_logcat_processes
 
 ART_APE_MT_READY_SS = "ART_APE_MT" # snapshot name
 TMP_LOCATION = "/data/local/tmp"
@@ -115,7 +116,6 @@ class ConnectionsWithValue(Connections):
 def mt_task(package_name, output_folder, serial, logging_flag, mt_is_running):
     connections = ConnectionsWithValue(package_name, serial, output_folder, mt_is_running)
 
-    kill_mtserver(serial)
     try:
         print('Start mtserver...')
         out = run_adb_cmd('shell /data/local/tmp/mtserver server {} {}'  \
@@ -169,20 +169,26 @@ def run_ape_with_mt(apk_path, avd_name, libart_path, ape_jar_path, mtserver_path
     except RuntimeError as e:
         print(e)
         return
-    set_multiprocessing_mode()
-
-    mt_is_running = Value('i', 0)
-    mtserver_proc = mp.Process(target=mt_task,
-        args=(package_name, mt_output_folder, avd.serial, "20010107", mt_is_running))
-    apetask_proc = mp.Process(target=ape_task,
-        args=(avd_name, avd.serial, package_name, ape_output_folder, running_minutes, mt_is_running))
-
-    mtserver_proc.start()
-    apetask_proc.start()
-    apetask_proc.join()
+    if not os.path.isdir(mt_output_folder):
+        os.makedirs(mt_output_folder)
 
     kill_mtserver(serial = avd.serial)
-    mtserver_proc.join()
+    mt_is_running = Value('i', 0)
+    mtserver_thread = threading.Thread(target=mt_task,
+        args=(package_name, mt_output_folder, avd.serial, "20010107", mt_is_running))
+    apetask_thread = threading.Thread(target=ape_task,
+        args=(avd_name, avd.serial, package_name, ape_output_folder, running_minutes, mt_is_running))
+
+    set_multiprocessing_mode()
+    generate_catcher_thread(os.path.join(mt_output_folder, "logcat.txt"),
+        serial = avd.serial)
+    mtserver_thread.start()
+    apetask_thread.start()
+    apetask_thread.join()
+
+    kill_mtserver(serial = avd.serial)
+    mtserver_thread.join()
+    kill_generated_logcat_processes()
     unset_multiprocessing_mode()
 
 if __name__ == "__main__":
