@@ -1,4 +1,4 @@
-from androidkit import run_cmd, run_adb_cmd
+from androidkit import run_cmd, run_adb_cmd, RunCmdError
 import time
 
 # error_log_cmd = "adb -s #{@emulator_serial} logcat AndroidRuntime:E CrashAnrDetector:D ActivityManager:E *:F *:S > #{@error_log_file_name} &"
@@ -8,10 +8,13 @@ def start_catcher(output_fname, serial = None):
     run_adb_cmd("logcat -c", serial = serial)
 
     with open(output_fname, 'wt') as f:
-        run_adb_cmd("logcat art:I AndroidRuntime:E CrashAnrDetector:D ActivityManager:E SQLiteDatabase:E WindowManager:E ActivityThread:E Parcel:E *:F *:S",
-            serial = serial,
-            stdout_callback = lambda t:f.write("O: " + t + '\n'),
-            stderr_callback = lambda t:f.write("E: " + t + '\n'),)
+        try:
+            run_adb_cmd("logcat art:I AndroidRuntime:E CrashAnrDetector:D ActivityManager:E SQLiteDatabase:E WindowManager:E ActivityThread:E Parcel:E *:F *:S",
+                serial = serial,
+                stdout_callback = lambda t:f.write("O: " + t + '\n'),
+                stderr_callback = lambda t:f.write("E: " + t + '\n'))
+        except RunCmdError as e:
+            pass
 
 def kill_generated_logcat_processes():
     import psutil

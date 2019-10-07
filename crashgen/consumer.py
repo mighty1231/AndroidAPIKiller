@@ -672,7 +672,8 @@ def collapse_per_message_2(prefix):
 
         def unroll(self, tid, ptr):
             # self.exit(tid, ptr)
-            assert ptr != dispatchMessage_ptr
+            if ptr == dispatchMessage_ptr:
+                self.cur_msg_id = -1
 
         # this is called by just below the entering dispatchMessage event
         def message_dispatched(self, tid, msg):
@@ -774,7 +775,8 @@ def collapse_per_message_binary(prefix):
 
         def unroll(self, tid, ptr):
             # self.exit(tid, ptr)
-            assert ptr != dispatchMessage_ptr
+            if ptr == dispatchMessage_ptr:
+                self.cur_msg_id = -1
 
         def idle(self, timestamp):
             self.idle_infos.append((
