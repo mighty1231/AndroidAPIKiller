@@ -173,8 +173,6 @@ def run_ape_with_mt(apk_path, avd_name, libart_path, ape_jar_path, mtserver_path
     except RuntimeError as e:
         print(e)
         return
-    if not os.path.isdir(mt_output_folder):
-        os.makedirs(mt_output_folder)
 
     kill_mtserver(serial = avd.serial)
     mt_is_running = Value('i', 0)
@@ -222,5 +220,11 @@ if __name__ == "__main__":
         dirname, filename = os.path.split(apk_path)
         ape_output_folder = args.ape_output_folder.format(dirname=dirname, filename=filename)
         mt_output_folder = args.mt_output_folder.format(dirname=dirname, filename=filename)
+        if not os.path.isdir(ape_output_folder):
+            print("Creating folder ", ape_output_folder)
+            os.makedirs(ape_output_folder)
+        if not os.path.isdir(mt_output_folder):
+            print("Creating folder ", mt_output_folder)
+            os.makedirs(mt_output_folder)
         run_ape_with_mt(apk_path, args.avd_name, args.libart_path, args.ape_jar_path, args.mtserver_path,
                 ape_output_folder, mt_output_folder, args.running_minutes)
