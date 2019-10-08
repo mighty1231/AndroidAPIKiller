@@ -78,6 +78,9 @@ class Methods:
     def __iter__(self, *args):
         return self.methods.__iter__(*args)
 
+    def __len__(self, *args):
+        return self.methods.__len__(*args)
+
     def find_method_ptr(self, classname, methodname, signature=None):
         for ptr in self.methods:
             c, m, sig, sf = self.methods[ptr]
