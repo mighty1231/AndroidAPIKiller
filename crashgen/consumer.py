@@ -753,7 +753,7 @@ def collapse_per_message_binary(prefix):
             assert self.cur_msg_id == -1
             self.cur_msg_id = int(msg[4:msg.index(']')])
             self.messages[self.cur_msg_id] = msg
-            self.cur_msgs_per_idle.append(msg)
+            self.cur_msgs_per_idle.append(self.cur_msg_id)
             self.mtds_per_message[self.cur_msg_id] = dict()
 
         def enter(self, tid, ptr):
