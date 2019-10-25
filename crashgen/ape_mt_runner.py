@@ -52,14 +52,14 @@ def install_art_ape_mt(avd_name, libart_path, ape_jar_path, mtserver_path, force
         serial = avd.serial
     else:
         serial = emulator_run_and_wait(avd_name, snapshot = ART_APE_MT_READY_SS,
-                writable_system = True, partition_size_in_mb=20480)
+                writable_system = True, partition_size_in_mb=8192)
 
     if force_clear or ART_APE_MT_READY_SS not in list_snapshots(serial = serial):
         print("No saved snapshot on the device, rebooting and making snapshot...")
         kill_emulator(serial = serial)
         time.sleep(3)
         serial = emulator_run_and_wait(avd_name, wipe_data = True,
-                writable_system = True, partition_size_in_mb=20480)
+                writable_system = True, partition_size_in_mb=8192)
 
         print("Installing libart.so")
         run_adb_cmd("remount", serial=serial)

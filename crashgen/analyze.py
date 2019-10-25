@@ -114,6 +114,71 @@ class MessageParse:
         else:
             raise RuntimeError('Unknown')
 
+    @staticmethod
+    def reason_check(messages):
+        assert isinstance(messages, dict)
+        parse_objects = dict() # id to MessageParse object
+        msg2reason = dict() # id to id
+        reason2msg = dict() # id to ids
+        for msgid in sorted(messages.keys()):
+            msgname = messages[msgid]
+            obj = MessageParse(msgname)
+            parse_objects[msgid] = obj
+
+            # reason
+            if obj.rtype == MessageParse.rMESSAGE:
+                assert obj.rmsgid < msgid
+                if obj.rmsgid in msg2reason:
+                    rid = msg2reason[obj.rmsgid]
+                else:
+                    rid = obj.rmsgid
+                msg2reason[msgid] = rid
+                try:
+                    reason2msg[rid].append(msgid)
+                except KeyError:
+                    reason2msg[rid] = [msgid]
+
+        # print
+        to_sort = []
+        reasoncontent2ct = dict()
+        for rid in sorted(reason2msg.keys()):
+            robj = parse_objects[rid]
+
+            if robj.rtype == MessageParse.rWHAT:
+                continue
+
+            descendants = set()
+            for msgid in reason2msg[rid]:
+                obj = parse_objects[msgid]
+                descendants.add((obj.content, obj.qtime))
+
+            # print('Reason %d %s' % (rid, robj.simple_reason(messages)))
+            # for c, t in descendants:
+            #     print(' - %s (%dms)' % (c, t))
+
+            rreason = robj.simple_reason(messages)
+            to_sort.append((rid, rreason, descendants))
+
+            try:
+                reasoncontent2ct[rreason][0].append(rid)
+                obj = reasoncontent2ct[rreason][1]
+                obj |= descendants
+            except KeyError:
+                reasoncontent2ct[rreason] = ([rid], descendants)
+
+        # for rid, reason, descendants in sorted(to_sort, key=lambda t:t[1]):
+        #     print('Reason %d %s' % (rid, reason))
+        #     for c, t in descendants:
+        #         print(' - %s (%dms)' % (c, t))
+        for reason in reasoncontent2ct:
+            rids, descendants = reasoncontent2ct[reason]
+            print('Reason {} {}'.format(reason, ', '.join(map(str, rids))))
+            for c, t in sorted(descendants, key=lambda pair:pair[0]):
+                print(' - %s (%dms)' % (c, t))
+
+
+
+
 
 class ResultData:
     '''
@@ -545,6 +610,9 @@ def draw_timeline(ape_output_dir, mt_output_dir):
             mtds_per_message = pickle.load(pkfile)
         with open(prefix + "col_idle.pk", 'rb') as pkfile:
             idle_infos = pickle.load(pkfile)
+
+        MessageParse.reason_check(messages)
+        raise
 
         for timestamp, msgids, mtdcnt in idle_infos:
             if action_tuples[cur_action_idx][2] != -1 and \
