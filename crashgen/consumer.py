@@ -66,6 +66,12 @@ class Methods:
 
         self.methods = methods
 
+    def items(self, *args):
+        return self.methods.items()
+
+    def values(self, *args):
+        return self.methods.values()
+
     def __getitem__(self, *args):
         return self.methods.__getitem__(*args)
 
@@ -558,6 +564,107 @@ def inspect_stack(prefix, idx = 0, stack_depth = -1, end_condition = None):
                  timestamp))
     })
 
+def inspect_stack2(prefix, targetmtdlist, idx = 0):
+    # See method stack with specific moment
+    threads = parse_threadinfo(prefix + "info_t.log")
+    methods = parse_methodinfo(prefix + "info_m.log")
+
+    get_method_info = lambda ptr:methods[ptr] if ptr in methods else ["method_%08X" % ptr]
+    get_thread_name = lambda tid:"%s(%d)" % (threads[tid], tid) if tid in threads else "Thread-%d" % tid
+
+    stack_depth_func = lambda st:len(st) - stack_depth if stack_depth > 0 else -1
+
+    def compress_stack(st):
+        ret = []
+        for content in st:
+            if content == 'u':
+                continue
+            ret.append(content[0]) # ptr
+        return tuple(ret)
+
+    def remove_stack_until(st, fptr, finfos):
+        for i in range(len(st)-1, -1, -1):
+            if st[i] != (fptr, finfos) and st[i] != 'u' and st[i][1][0] == "Ljava/lang/ThreadLocal$Values;":
+                st.pop()
+            else:
+                break
+
+    class MethodStackPerThread:
+        def __init__(self, threads, methods):
+            self.stack_per_thread = {} # tid -> stack
+            self.threads = threads
+            self.methods = methods
+            self.targetmtdlist = targetmtdlist
+            self.mtd_to_stack = {ptr:set() for ptr in targetmtdlist}
+
+        def get_stack(self, tid):
+            try:
+                return self.stack_per_thread[tid]
+            except KeyError:
+                self.stack_per_thread[tid] = []
+                return self.stack_per_thread[tid]
+
+        def enter(self, tid, ptr):
+            stack = self.get_stack(tid)
+            old_level = len(stack)
+            finfos = get_method_info(ptr)
+            if len(stack) > 1 and stack[-1] == 'u' and stack[-2][0] == ptr:
+                stack.pop()
+                stack.pop()
+            stack.append((ptr, get_method_info(ptr)))
+
+            if ptr in self.targetmtdlist:
+                print('Entering', get_method_info(ptr))
+                self.mtd_to_stack[ptr].add(compress_stack(stack))
+
+        def exit(self, tid, ptr):
+            stack = self.get_stack(tid)
+            old_level = len(stack)
+            finfos = get_method_info(ptr)
+            if len(stack) > 0:
+                top_elem = stack.pop()
+                if top_elem == 'u': # unroll
+                    top_elem = stack.pop()
+                    if top_elem != (ptr, finfos):
+                        top_elem = stack.pop()
+                        if top_elem != (ptr, finfos):
+                            remove_stack_until(stack, ptr, finfos)
+                            top_elem = stack.pop()
+                            if top_elem != (ptr, finfos):
+                                raise RuntimeError
+                else:
+                    if top_elem != (ptr, finfos):
+                        remove_stack_until(stack, ptr, finfos)
+                        top_elem = stack.pop()
+                        if top_elem != (ptr, finfos):
+                            raise RuntimeError
+
+        def unroll(self, tid, ptr):
+            stack = self.get_stack(tid)
+            old_level = len(stack)
+            finfos = get_method_info(ptr)
+            while len(stack) > 0 and stack[-1][0] != ptr:
+                stack.pop()
+            stack.append('u')
+
+        def print_stacks(self):
+            for ptr in self.mtd_to_stack:
+                stacks = self.mtd_to_stack[ptr]
+                print('METHOD {}'.format(get_method_info(ptr)))
+                for stack in stacks:
+                    for idx, mtd in enumerate(reversed(stack)):
+                        print("{}: {}".format(idx, get_method_info(mtd)))
+                    print()
+                print()
+
+    mstack = MethodStackPerThread(threads, methods)
+    parse_data(prefix + "data_{}.bin".format(idx), {
+        0: mstack.enter,
+        1: mstack.exit,
+        2: mstack.unroll,
+    })
+    mstack.print_stacks()
+
 def collapse_reader(fname):
     global_m2c = dict()
     m2i = dict()
@@ -875,6 +982,11 @@ if __name__ == "__main__":
     stack_parser.add_argument('--count', default=None)
     stack_parser.add_argument('--depth', default='7')
 
+    stack2_parser = subparsers.add_parser('stack2',
+        help='Print function stack for given methods')
+    stack2_parser.add_argument('prefix')
+    stack2_parser.add_argument('mtdptrs')
+
     collapse_parser = subparsers.add_parser('collapse',
         help='Collapse MiniTrace logs')
     collapse_parser.add_argument('prefix')
@@ -907,6 +1019,9 @@ if __name__ == "__main__":
             return False
 
         inspect_stack(args.prefix, stack_depth = depth, end_condition = end_condition)
+    elif args.func == 'stack2':
+        mtdptrs = list(map(lambda s:int(s,16), args.mtdptrs.split(',')))
+        inspect_stack2(args.prefix, mtdptrs)
     elif args.func == 'collapse':
         collapse_per_message_2(args.prefix)
     elif args.func == 'analyze':
