@@ -136,8 +136,7 @@ class CacheDecorator:
 def run_adb_cmd(orig_cmd, serial=None, timeout=None, retry_cnt=2,
         stdout_callback = None, stderr_callback = None):
     # timeout should be string, for example '2s'
-    # adb_binary = os.path.join(getConfig()['SDK_PATH'], 'platform-tools/adb')
-    adb_binary = 'adb'
+    adb_binary = getConfig('ADB_PATH')
     if serial is None:
         cmd = '{} {}'.format(adb_binary, orig_cmd)
     elif type(serial) == int:
@@ -391,7 +390,7 @@ def run_cmd(cmd, cwd=None, env=None):
 
 def get_package_name(apk_path):
     res = run_cmd("{} dump badging {} | grep package | awk '{{print $2}}' | sed s/name=//g | sed s/\\'//g".format(
-        getConfig()['AAPT_PATH'], apk_path
+        getConfig('AAPT_PATH'), apk_path
     ))
     return res.strip()
 

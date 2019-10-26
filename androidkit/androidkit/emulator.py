@@ -107,7 +107,7 @@ def emulator_run_and_wait(avd_name, serial=None, snapshot=None, wipe_data=False,
         emulator_cmd.append('-partition-size {}'.format(partition_size_in_mb))
 
     proc = subprocess.Popen(' '.join(emulator_cmd), stdout=w_fd, stderr=w_fd, shell=True,
-        cwd = os.path.join(getConfig()['SDK_PATH'], 'tools'))
+        cwd = os.path.join(getConfig('SDK_PATH'), 'tools'))
     os.close(w_fd)
 
     emulator_wait_for_boot(avd_name, r_fd, serial=serial)

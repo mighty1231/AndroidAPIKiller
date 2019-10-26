@@ -42,7 +42,7 @@ class AVD:
 
 def run_avdmanager(cmd):
     # wrapper for avdmanager
-    avdmanager = getConfig()['AVDMANAGER_PATH']
+    avdmanager = getConfig('AVDMANAGER_PATH')
     try:
         output = run_cmd('{} {}'.format(avdmanager, cmd))
         return output
