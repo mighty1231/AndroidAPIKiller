@@ -1,5 +1,8 @@
 from androidkit import run_cmd, run_adb_cmd, RunCmdError
 import time
+import psutil
+import os
+import threading
 
 # error_log_cmd = "adb -s #{@emulator_serial} logcat AndroidRuntime:E CrashAnrDetector:D ActivityManager:E *:F *:S > #{@error_log_file_name} &"
 # "AndroidRuntime:E CrashAnrDetector:D ActivityManager:E SQLiteDatabase:E WindowManager:E ActivityThread:E Parcel:E *:F *:S"
@@ -17,9 +20,6 @@ def start_catcher(output_fname, serial = None):
             pass
 
 def kill_generated_logcat_processes():
-    import psutil
-    import os
-
     this_proc = psutil.Process(os.getpid())
     for child in this_proc.children(recursive=True):
         cmdline = child.cmdline()
@@ -27,8 +27,6 @@ def kill_generated_logcat_processes():
             child.terminate()
 
 def generate_catcher_thread(output_fname, serial = None):
-    import threading
-
     thread = threading.Thread(target=start_catcher, args=(output_fname, serial))
     thread.daemon = True
     thread.start()
