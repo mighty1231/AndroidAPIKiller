@@ -138,7 +138,7 @@ if __name__ == "__main__":
     ]
     with open(mtdtarget_fname, 'wt') as f:
         for clsname, mtdname, signature in methods:
-           f.write("%s\t%s\t%s\t1\n".format(clsname, mtdname, signature)) # 1: method enter
+           f.write("%s\t%s\t%s\t1\n" % (clsname, mtdname, signature)) # 1: method enter
         # f.write("android/app/ActivityThread\trequestRelaunchActivity\t(Landroid/os/IBinder;Ljava/util/List;Ljava/util/List;IZLandroid/content/res/Configuration;Z)V\t1\n")
 
     i = 0
