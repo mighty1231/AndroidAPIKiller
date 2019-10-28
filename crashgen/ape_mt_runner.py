@@ -139,8 +139,15 @@ def mt_task(package_name, output_folder, serial, logging_flag, mt_is_running):
 
 
 def ape_task(avd_name, serial, package_name, output_dir, running_minutes, mt_is_running):
-    while mt_is_running.value == 0:
+    sleep_cnt = 0
+    while mt_is_running.value == 0 and sleep_cnt < 30:
         time.sleep(1)
+        sleep_cnt += 1
+    # Something wrong on mtserver, wait 30 seconds
+    if sleep_cnt == 30:
+        kill_mtserver(serial=serial)
+        return
+
     print('ape_task(): Emulator[{}, {}] Running APE with package {}'.format(avd_name, serial, package_name))
     args = '-p {} --running-minutes {} --mt --ape sata'.format(package_name, running_minutes)
     with open(os.path.join(output_dir, 'ape_stdout_stderr.txt'), 'wt') as f:
@@ -193,6 +200,11 @@ def run_ape_with_mt(apk_path, avd_name, libart_path, ape_jar_path, mtserver_path
     kill_generated_logcat_processes()
     unset_multiprocessing_mode()
 
+    if mt_is_running.value == 0: # It failed to run ape/mt
+        print('run_ape_with_mt(): failed to run')
+        return False
+    return True
+
 if __name__ == "__main__":
     import argparse
 
@@ -216,7 +228,9 @@ if __name__ == "__main__":
             assert os.path.isfile(line), 'Parsing apk list: {} is not a file'.format(line)
             apk_files.append(line)
 
-    for apk_path in apk_files:
+    i = 0
+    while i < len(apk_files):
+        apk_path = apk_files[i]
         dirname, filename = os.path.split(apk_path)
         ape_output_folder = args.ape_output_folder.format(dirname=dirname, filename=filename)
         mt_output_folder = args.mt_output_folder.format(dirname=dirname, filename=filename)
@@ -226,5 +240,6 @@ if __name__ == "__main__":
         if not os.path.isdir(mt_output_folder):
             print("Creating folder ", mt_output_folder)
             os.makedirs(mt_output_folder)
-        run_ape_with_mt(apk_path, args.avd_name, args.libart_path, args.ape_jar_path, args.mtserver_path,
-                ape_output_folder, mt_output_folder, args.running_minutes)
+        if run_ape_with_mt(apk_path, args.avd_name, args.libart_path, args.ape_jar_path, args.mtserver_path,
+                ape_output_folder, mt_output_folder, args.running_minutes):
+            i += 1

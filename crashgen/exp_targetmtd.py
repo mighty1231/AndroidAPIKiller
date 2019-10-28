@@ -40,8 +40,14 @@ def libart_check(libart_path, serial):
 from ape_mt_runner import install_art_ape_mt, ConnectionsWithValue, mt_task
 
 def ape_task(avd_name, serial, package_name, output_dir, running_minutes, mt_is_running, mtdtarget = None):
-    while mt_is_running.value == 0:
+    sleep_cnt = 0
+    while mt_is_running.value == 0 and sleep_cnt < 30:
         time.sleep(1)
+        sleep_cnt += 1
+    # Something wrong on mtserver, wait 30 seconds
+    if sleep_cnt == 30:
+        kill_mtserver(serial=serial)
+        return
     if mtdtarget:
         run_adb_cmd("push {} {}".format(mtdtarget_fname, mtdtarget_destname))
     print('ape_task(): Emulator[{}, {}] Running APE with package {}'.format(avd_name, serial, package_name))
@@ -99,6 +105,11 @@ def run_ape_with_mt(apk_path, avd_name, libart_path, ape_jar_path, mtserver_path
     kill_generated_logcat_processes()
     unset_multiprocessing_mode()
 
+    if mt_is_running.value == 0: # It failed to run ape/mt
+        print('run_ape_with_mt(): failed to run')
+        return False
+    return True
+
 if __name__ == "__main__":
     import argparse
 
@@ -121,10 +132,17 @@ if __name__ == "__main__":
     mt_output_folder = args.mt_output_folder.format(dirname=dirname, filename=filename)
 
     # mtdtarget
+    methods = [
+        ("android/app/IntentService", "onStart", "(Landroid/content/Intent;I)V"),
+        ("com/android/org/conscrypt/OpenSSLECGroupContext", "getContext", "()J"),
+    ]
     with open(mtdtarget_fname, 'wt') as f:
-        f.write("android/app/ActivityThread\trequestRelaunchActivity\t(Landroid/os/IBinder;Ljava/util/List;Ljava/util/List;IZLandroid/content/res/Configuration;Z)V\t1\n")
+        for clsname, mtdname, signature in methods:
+           f.write("%s\t%s\t%s\t1\n".format(clsname, mtdname, signature)) # 1: method enter
+        # f.write("android/app/ActivityThread\trequestRelaunchActivity\t(Landroid/os/IBinder;Ljava/util/List;Ljava/util/List;IZLandroid/content/res/Configuration;Z)V\t1\n")
 
-    for i in range(1, 10):
+    i = 0
+    while i < 10:
         aof = ape_output_folder + "_t_{}".format(i)
         mof = mt_output_folder + "_t_{}".format(i)
         if not os.path.isdir(aof):
@@ -133,10 +151,12 @@ if __name__ == "__main__":
         if not os.path.isdir(mof):
             print("Creating folder ", mof)
             os.makedirs(mof)
-        run_ape_with_mt(args.apk_path, args.avd_name, args.libart_path, args.ape_jar_path, args.mtserver_path,
-                aof, mof, args.running_minutes, mtdtarget_destname)
+        if run_ape_with_mt(args.apk_path, args.avd_name, args.libart_path, args.ape_jar_path, args.mtserver_path,
+                aof, mof, args.running_minutes, mtdtarget_destname):
+            i += 1
 
-    for i in range(2, 10):
+    i = 0
+    while i < 10:
         aof = ape_output_folder + "_nt_{}".format(i)
         mof = mt_output_folder + "_nt_{}".format(i)
         if not os.path.isdir(aof):
@@ -145,5 +165,6 @@ if __name__ == "__main__":
         if not os.path.isdir(mof):
             print("Creating folder ", mof)
             os.makedirs(mof)
-        run_ape_with_mt(args.apk_path, args.avd_name, args.libart_path, args.ape_jar_path, args.mtserver_path,
-                aof, mof, args.running_minutes)
+        if run_ape_with_mt(args.apk_path, args.avd_name, args.libart_path, args.ape_jar_path, args.mtserver_path,
+                aof, mof, args.running_minutes):
+            i += 1
