@@ -170,7 +170,6 @@ class Connections:
             self.close_connection(int(socketfd), prefix)
             return
 
-        match = re.match()
         if line.startswith("Server failed to fetch uid information") \
                 or line.startswith("Killing process, uid"):
             return

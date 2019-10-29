@@ -179,7 +179,7 @@ def run_ape_with_mt(apk_path, avd_name, libart_path, ape_jar_path, mtserver_path
         install_package(apk_path, serial=avd.serial)
     except RuntimeError as e:
         print(e)
-        return
+        return True
 
     kill_mtserver(serial = avd.serial)
     mt_is_running = Value('i', 0)
