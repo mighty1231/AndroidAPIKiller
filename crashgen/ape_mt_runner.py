@@ -43,6 +43,7 @@ def install_art_ape_mt(avd_name, libart_path, ape_jar_path, mtserver_path, force
     avd_list = get_avd_list()
     avd = next(avd for avd in avd_list if avd.name == avd_name)
 
+    serial = None
     if avd.running:
         if not force_clear and ART_APE_MT_READY_SS in list_snapshots(serial = avd.serial):
             load_snapshot(ART_APE_MT_READY_SS, serial = avd.serial)
@@ -56,7 +57,8 @@ def install_art_ape_mt(avd_name, libart_path, ape_jar_path, mtserver_path, force
 
     if force_clear or ART_APE_MT_READY_SS not in list_snapshots(serial = serial):
         print("No saved snapshot on the device, rebooting and making snapshot...")
-        kill_emulator(serial = serial)
+        if serial:
+            kill_emulator(serial = serial)
         time.sleep(3)
         serial = emulator_run_and_wait(avd_name, wipe_data = True,
                 writable_system = True, partition_size_in_mb=8192)
@@ -230,6 +232,7 @@ if __name__ == "__main__":
             apk_files.append(line)
 
     i = 0
+    force_clear = args.force_clear
     while i < len(apk_files):
         apk_path = apk_files[i]
         dirname, filename = os.path.split(apk_path)
@@ -242,5 +245,6 @@ if __name__ == "__main__":
             print("Creating folder ", mt_output_folder)
             os.makedirs(mt_output_folder)
         if run_ape_with_mt(apk_path, args.avd_name, args.libart_path, args.ape_jar_path, args.mtserver_path,
-                ape_output_folder, mt_output_folder, args.running_minutes, args.force_clear):
+                ape_output_folder, mt_output_folder, args.running_minutes, force_clear):
             i += 1
+            force_clear = False
