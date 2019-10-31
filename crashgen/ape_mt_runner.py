@@ -50,7 +50,7 @@ def install_art_ape_mt(avd_name, libart_path, ape_jar_path, mtserver_path, force
             assert libart_check(libart_path, serial = avd.serial)
             return avd
         serial = avd.serial
-    else:
+    elif not force_clear:
         serial = emulator_run_and_wait(avd_name, snapshot = ART_APE_MT_READY_SS,
                 writable_system = True, partition_size_in_mb=8192)
 
@@ -165,7 +165,7 @@ def ape_task(avd_name, serial, package_name, output_dir, running_minutes, mt_is_
     fetch_result(output_dir, serial)
 
 def run_ape_with_mt(apk_path, avd_name, libart_path, ape_jar_path, mtserver_path,
-        ape_output_folder, mt_output_folder, running_minutes):
+        ape_output_folder, mt_output_folder, running_minutes, force_clear):
     package_name = get_package_name(apk_path)
     print('run_ape_with_mt(): given apk_path {} avd_name {}'.format(apk_path, avd_name))
 
@@ -173,7 +173,7 @@ def run_ape_with_mt(apk_path, avd_name, libart_path, ape_jar_path, mtserver_path
     assert os.path.split(mtserver_path)[1] == 'mtserver'
     assert os.path.split(ape_jar_path)[1] == 'ape.jar'
 
-    avd = install_art_ape_mt(avd_name, libart_path, ape_jar_path, mtserver_path)
+    avd = install_art_ape_mt(avd_name, libart_path, ape_jar_path, mtserver_path, force_clear)
 
     try:
         install_package(apk_path, serial=avd.serial)
@@ -211,6 +211,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Runner of APE with MiniTracing')
     parser.add_argument('apk_list_file')
     parser.add_argument('avd_name')
+    parser.add_argument('--force_clear', default=False, action='store_true')
     parser.add_argument('--libart_path', default='../bin/libart.so')
     parser.add_argument('--ape_jar_path', default='../bin/ape.jar')
     parser.add_argument('--mtserver_path', default='../bin/mtserver')
@@ -241,5 +242,5 @@ if __name__ == "__main__":
             print("Creating folder ", mt_output_folder)
             os.makedirs(mt_output_folder)
         if run_ape_with_mt(apk_path, args.avd_name, args.libart_path, args.ape_jar_path, args.mtserver_path,
-                ape_output_folder, mt_output_folder, args.running_minutes):
+                ape_output_folder, mt_output_folder, args.running_minutes, args.force_clear):
             i += 1

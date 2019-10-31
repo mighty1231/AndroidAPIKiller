@@ -68,7 +68,7 @@ def ape_task(avd_name, serial, package_name, output_dir, running_minutes, mt_is_
     fetch_result(output_dir, serial)
 
 def run_ape_with_mt(apk_path, avd_name, libart_path, ape_jar_path, mtserver_path,
-        ape_output_folder, mt_output_folder, running_minutes, mtdtarget=None):
+        ape_output_folder, mt_output_folder, running_minutes, force_clear, mtdtarget=None):
     package_name = get_package_name(apk_path)
     print('run_ape_with_mt(): given apk_path {} avd_name {}'.format(apk_path, avd_name))
 
@@ -76,7 +76,7 @@ def run_ape_with_mt(apk_path, avd_name, libart_path, ape_jar_path, mtserver_path
     assert os.path.split(mtserver_path)[1] == 'mtserver'
     assert os.path.split(ape_jar_path)[1] == 'ape.jar'
 
-    avd = install_art_ape_mt(avd_name, libart_path, ape_jar_path, mtserver_path)
+    avd = install_art_ape_mt(avd_name, libart_path, ape_jar_path, mtserver_path, force_clear)
 
 
     try:
@@ -116,6 +116,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Runner of APE with MiniTracing')
     parser.add_argument('apk_path')
     parser.add_argument('avd_name')
+    parser.add_argument('--force_clear', default=False, action='store_true')
     parser.add_argument('--libart_path', default='../bin/libart.so')
     parser.add_argument('--ape_jar_path', default='../bin/ape.jar')
     parser.add_argument('--mtserver_path', default='../bin/mtserver')
@@ -133,8 +134,9 @@ if __name__ == "__main__":
 
     # mtdtarget
     methods = [
-        ("android/app/IntentService", "onStart", "(Landroid/content/Intent;I)V"),
-        ("com/android/org/conscrypt/OpenSSLECGroupContext", "getContext", "()J"),
+        # ("android/app/IntentService", "onStart", "(Landroid/content/Intent;I)V"),
+        # ("com/android/org/conscrypt/OpenSSLECGroupContext", "getContext", "()J"),
+        ("com/fsck/k9/activity/setup/WelcomeMessage", "hiddenFunc", "()V"),
     ]
     with open(mtdtarget_fname, 'wt') as f:
         for clsname, mtdname, signature in methods:
@@ -142,7 +144,7 @@ if __name__ == "__main__":
         # f.write("android/app/ActivityThread\trequestRelaunchActivity\t(Landroid/os/IBinder;Ljava/util/List;Ljava/util/List;IZLandroid/content/res/Configuration;Z)V\t1\n")
 
     i = 0
-    while i < 10:
+    while i < 3:
         aof = ape_output_folder + "_t_{}".format(i)
         mof = mt_output_folder + "_t_{}".format(i)
         if not os.path.isdir(aof):
@@ -152,19 +154,19 @@ if __name__ == "__main__":
             print("Creating folder ", mof)
             os.makedirs(mof)
         if run_ape_with_mt(args.apk_path, args.avd_name, args.libart_path, args.ape_jar_path, args.mtserver_path,
-                aof, mof, args.running_minutes, mtdtarget_destname):
+                aof, mof, args.running_minutes, args.force_clear, mtdtarget_destname):
             i += 1
 
-    i = 0
-    while i < 10:
-        aof = ape_output_folder + "_nt_{}".format(i)
-        mof = mt_output_folder + "_nt_{}".format(i)
-        if not os.path.isdir(aof):
-            print("Creating folder ", aof)
-            os.makedirs(aof)
-        if not os.path.isdir(mof):
-            print("Creating folder ", mof)
-            os.makedirs(mof)
-        if run_ape_with_mt(args.apk_path, args.avd_name, args.libart_path, args.ape_jar_path, args.mtserver_path,
-                aof, mof, args.running_minutes):
-            i += 1
+    # i = 0
+    # while i < 10:
+    #     aof = ape_output_folder + "_nt_{}".format(i)
+    #     mof = mt_output_folder + "_nt_{}".format(i)
+    #     if not os.path.isdir(aof):
+    #         print("Creating folder ", aof)
+    #         os.makedirs(aof)
+    #     if not os.path.isdir(mof):
+    #         print("Creating folder ", mof)
+    #         os.makedirs(mof)
+    #     if run_ape_with_mt(args.apk_path, args.avd_name, args.libart_path, args.ape_jar_path, args.mtserver_path,
+    #             aof, mof, args.running_minutes, args.force_clear):
+    #         i += 1
