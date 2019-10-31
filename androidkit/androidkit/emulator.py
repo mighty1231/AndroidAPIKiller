@@ -15,7 +15,7 @@ def emulator_wait_for_boot(avd_name, r_fd=None, serial=None):
             print('RunEmulator[{}, {}]: shell getprop init.svc.bootanim'.format(avd_name, serial))
             bootanim = run_adb_cmd('shell getprop init.svc.bootanim', serial=serial)
         except RunCmdError as e:
-            if 'not found' in e.err and not_found_cnt < 4:
+            if 'not found' in e.err and not_found_cnt < 5:
                 not_found_cnt += 1
             else:
                 print('RunEmulator[{}, {}]: Failed, check following message'.format(avd_name, serial))
