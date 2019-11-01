@@ -457,6 +457,22 @@ def print_data(prefix, idx = 0):
         lambda func_id: print('TargetMethod #%d be unwinded' % func_id),
     ])
 
+def print_target_data(prefix, idx = 0):
+    threads = parse_threadinfo(prefix + "info_t.log")
+    methods = parse_methodinfo(prefix + "info_m.log")
+    fields = parse_fieldinfo(prefix + "info_f.log")
+
+    get_method_info = lambda ptr:methods[ptr] if ptr in methods else ["method_%08X" % ptr]
+    get_field_info = lambda ptr, detidx:fields[ptr, detidx] if (ptr, detidx) in fields else ["field_%08X" % ptr]
+    get_thread_name = lambda tid:"%s(%d)" % (threads[tid], tid) if tid in threads else "Thread-%d" % tid
+
+    parse_data(prefix + "data_{}.bin".format(idx), {
+        10: lambda func_id: print('TargetMethod #%d be entered' % func_id),
+        11: lambda func_id: print('TargetMethod #%d be exited' % func_id),
+        12: lambda func_id: print('TargetMethod #%d be unwinded' % func_id),
+    })
+
+
 def inspect_stack(prefix, idx = 0, stack_depth = -1, end_condition = None):
     # See method stack with specific moment
     threads = parse_threadinfo(prefix + "info_t.log")
@@ -989,6 +1005,10 @@ if __name__ == "__main__":
         help='Print all log to read')
     print_parser.add_argument('prefix')
 
+    target_parser = subparsers.add_parser('target',
+        help='Print for just target method called')
+    target_parser.add_argument('prefix')
+
     stack_parser = subparsers.add_parser('stack',
         help='Print function stack for every method enter/exit')
     stack_parser.add_argument('prefix')
@@ -1034,6 +1054,8 @@ if __name__ == "__main__":
             return False
 
         inspect_stack(args.prefix, stack_depth = depth, end_condition = end_condition)
+    elif args.func == 'target':
+        print_target_data(args.prefix)
     elif args.func == 'stack2':
         mtdptrs = list(map(lambda s:int(s,16), args.mtdptrs.split(',')))
         inspect_stack2(args.prefix, mtdptrs)

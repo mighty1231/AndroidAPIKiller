@@ -88,7 +88,7 @@ def run_ape_with_mt(apk_path, avd_name, libart_path, ape_jar_path, mtserver_path
     kill_mtserver(serial = avd.serial)
     mt_is_running = Value('i', 0)
     mtserver_thread = threading.Thread(target=mt_task,
-        args=(package_name, mt_output_folder, avd.serial, "20010107", mt_is_running))
+        args=(package_name, mt_output_folder, avd.serial, "20010100", mt_is_running))
     apetask_thread = threading.Thread(target=ape_task,
         args=(avd_name, avd.serial, package_name, ape_output_folder, running_minutes,
               mt_is_running, mtdtarget, no_guide))
@@ -156,7 +156,7 @@ if __name__ == "__main__":
 
     force_clear = args.force_clear
     i = 0
-    while i < 1:
+    while i < 10:
         aof = ape_output_folder + "_t_{}".format(i)
         mof = mt_output_folder + "_t_{}".format(i)
         if not os.path.isdir(aof):
@@ -171,7 +171,7 @@ if __name__ == "__main__":
             force_clear = False
 
     i = 0
-    while i < 1:
+    while i < 10:
         aof = ape_output_folder + "_nt_{}".format(i)
         mof = mt_output_folder + "_nt_{}".format(i)
         if not os.path.isdir(aof):
@@ -182,4 +182,5 @@ if __name__ == "__main__":
             os.makedirs(mof)
         if run_ape_with_mt(args.apk_path, args.avd_name, args.libart_path, args.ape_jar_path, args.mtserver_path,
                 aof, mof, args.running_minutes, force_clear, mtdtarget_destname, no_guide=True):
+            force_clear = False
             i += 1
