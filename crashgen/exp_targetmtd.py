@@ -39,7 +39,7 @@ def libart_check(libart_path, serial):
 
 from ape_mt_runner import install_art_ape_mt, ConnectionsWithValue, mt_task
 
-def ape_task(avd_name, serial, package_name, output_dir, running_minutes, mt_is_running, mtdtarget = None):
+def ape_task(avd_name, serial, package_name, output_dir, running_minutes, mt_is_running, mtdtarget, no_guide):
     sleep_cnt = 0
     while mt_is_running.value == 0 and sleep_cnt < 30:
         time.sleep(1)
@@ -48,11 +48,11 @@ def ape_task(avd_name, serial, package_name, output_dir, running_minutes, mt_is_
     if sleep_cnt == 30:
         kill_mtserver(serial=serial)
         return
-    if mtdtarget:
-        run_adb_cmd("push {} {}".format(mtdtarget_fname, mtdtarget_destname))
+    assert mtdtarget
+    run_adb_cmd("push {} {}".format(mtdtarget_fname, mtdtarget_destname))
     print('ape_task(): Emulator[{}, {}] Running APE with package {}'.format(avd_name, serial, package_name))
-    args = '-p {} --running-minutes {} --mt {} --ape sata'.format(package_name, running_minutes,
-        "--mtdtarget {}".format(mtdtarget_destname) if mtdtarget else "")
+    args = '-p {} --running-minutes {} --mt --mtdtarget {} {}--ape sata'.format(package_name, running_minutes, mtdtarget_destname,
+        "--no-mtdguide " if no_guide else "")
     with open(os.path.join(output_dir, 'ape_stdout_stderr.txt'), 'wt') as f:
         ret = run_adb_cmd('shell CLASSPATH={} {} {} {} {}'.format(
                 os.path.join(TMP_LOCATION, 'ape.jar'),
@@ -68,7 +68,7 @@ def ape_task(avd_name, serial, package_name, output_dir, running_minutes, mt_is_
     fetch_result(output_dir, serial)
 
 def run_ape_with_mt(apk_path, avd_name, libart_path, ape_jar_path, mtserver_path,
-        ape_output_folder, mt_output_folder, running_minutes, force_clear, mtdtarget=None):
+        ape_output_folder, mt_output_folder, running_minutes, force_clear, mtdtarget, no_guide=False):
     package_name = get_package_name(apk_path)
     print('run_ape_with_mt(): given apk_path {} avd_name {}'.format(apk_path, avd_name))
 
@@ -91,7 +91,7 @@ def run_ape_with_mt(apk_path, avd_name, libart_path, ape_jar_path, mtserver_path
         args=(package_name, mt_output_folder, avd.serial, "20010107", mt_is_running))
     apetask_thread = threading.Thread(target=ape_task,
         args=(avd_name, avd.serial, package_name, ape_output_folder, running_minutes,
-              mt_is_running, mtdtarget))
+              mt_is_running, mtdtarget, no_guide))
 
     set_multiprocessing_mode()
     generate_catcher_thread(os.path.join(mt_output_folder, "logcat.txt"),
@@ -156,7 +156,7 @@ if __name__ == "__main__":
 
     force_clear = args.force_clear
     i = 0
-    while i < 10:
+    while i < 1:
         aof = ape_output_folder + "_t_{}".format(i)
         mof = mt_output_folder + "_t_{}".format(i)
         if not os.path.isdir(aof):
@@ -166,12 +166,12 @@ if __name__ == "__main__":
             print("Creating folder ", mof)
             os.makedirs(mof)
         if run_ape_with_mt(args.apk_path, args.avd_name, args.libart_path, args.ape_jar_path, args.mtserver_path,
-                aof, mof, args.running_minutes, force_clear, mtdtarget_destname):
+                aof, mof, args.running_minutes, force_clear, mtdtarget_destname, no_guide=False):
             i += 1
             force_clear = False
 
     i = 0
-    while i < 10:
+    while i < 1:
         aof = ape_output_folder + "_nt_{}".format(i)
         mof = mt_output_folder + "_nt_{}".format(i)
         if not os.path.isdir(aof):
@@ -181,5 +181,5 @@ if __name__ == "__main__":
             print("Creating folder ", mof)
             os.makedirs(mof)
         if run_ape_with_mt(args.apk_path, args.avd_name, args.libart_path, args.ape_jar_path, args.mtserver_path,
-                aof, mof, args.running_minutes, args.force_clear):
+                aof, mof, args.running_minutes, force_clear, mtdtarget_destname, no_guide=True):
             i += 1

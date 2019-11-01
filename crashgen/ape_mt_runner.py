@@ -44,48 +44,52 @@ def install_art_ape_mt(avd_name, libart_path, ape_jar_path, mtserver_path, force
     avd = next(avd for avd in avd_list if avd.name == avd_name)
 
     serial = None
-    if avd.running:
-        if not force_clear and ART_APE_MT_READY_SS in list_snapshots(serial = avd.serial):
+    if not force_clear: # use snapshot if it is possible
+        if avd.running and ART_APE_MT_READY_SS in list_snapshots(serial = avd.serial):
             load_snapshot(ART_APE_MT_READY_SS, serial = avd.serial)
             time.sleep(3)
             assert libart_check(libart_path, serial = avd.serial)
             return avd
-        serial = avd.serial
-    elif not force_clear:
         serial = emulator_run_and_wait(avd_name, snapshot = ART_APE_MT_READY_SS,
                 writable_system = True, partition_size_in_mb=8192)
 
-    if force_clear or ART_APE_MT_READY_SS not in list_snapshots(serial = serial):
+        if ART_APE_MT_READY_SS in list_snapshots(serial = serial):
+            # now running
+            avd.setRunning(serial)
+            return avd
         print("No saved snapshot on the device, rebooting and making snapshot...")
-        if serial:
-            kill_emulator(serial = serial)
+        kill_emulator(serial = serial)
         time.sleep(3)
-        serial = emulator_run_and_wait(avd_name, wipe_data = True,
-                writable_system = True, partition_size_in_mb=8192)
+    elif avd.running: # if force_clear, turn off running emulators
+        kill_emulator(serial = avd.serial)
+        time.sleep(3)
 
-        print("Installing libart.so")
-        run_adb_cmd("remount", serial=serial)
-        run_adb_cmd("shell su root mount -o remount,rw /system", serial=serial)
-        run_adb_cmd("push {} /sdcard/libart.so".format(libart_path), serial=serial)
-        run_adb_cmd("shell su root mv /sdcard/libart.so /system/lib/libart.so", serial=serial)
-        run_adb_cmd("shell su root chmod 644 /system/lib/libart.so", serial=serial)
-        run_adb_cmd("shell su root chown root:root /system/lib/libart.so", serial=serial)
-        run_adb_cmd("shell su root reboot")
+    serial = emulator_run_and_wait(avd_name, wipe_data = True,
+            writable_system = True, partition_size_in_mb=8192)
 
-        print("Wait for emulator")
-        emulator_wait_for_boot(avd_name, r_fd=None, serial=serial)
+    print("Installing libart.so")
+    run_adb_cmd("remount", serial=serial)
+    run_adb_cmd("shell su root mount -o remount,rw /system", serial=serial)
+    run_adb_cmd("push {} /sdcard/libart.so".format(libart_path), serial=serial)
+    run_adb_cmd("shell su root mv /sdcard/libart.so /system/lib/libart.so", serial=serial)
+    run_adb_cmd("shell su root chmod 644 /system/lib/libart.so", serial=serial)
+    run_adb_cmd("shell su root chown root:root /system/lib/libart.so", serial=serial)
+    run_adb_cmd("shell su root reboot")
 
-        print("Setup emulator...")
-        emulator_setup(serial = serial)
+    print("Wait for emulator")
+    emulator_wait_for_boot(avd_name, r_fd=None, serial=serial)
 
-        print("Installing ape.jar")
-        run_adb_cmd("push {} {}".format(ape_jar_path, os.path.join(TMP_LOCATION, "ape.jar")), serial=serial)
+    print("Setup emulator...")
+    emulator_setup(serial = serial)
 
-        print("Installing minitrace")
-        run_adb_cmd("push {} {}".format(mtserver_path, TMP_LOCATION), serial=serial)
+    print("Installing ape.jar")
+    run_adb_cmd("push {} {}".format(ape_jar_path, os.path.join(TMP_LOCATION, "ape.jar")), serial=serial)
 
-        save_snapshot(ART_APE_MT_READY_SS, serial = serial)
-        assert libart_check(libart_path, serial = avd.serial)
+    print("Installing minitrace")
+    run_adb_cmd("push {} {}".format(mtserver_path, TMP_LOCATION), serial=serial)
+
+    save_snapshot(ART_APE_MT_READY_SS, serial = serial)
+    assert libart_check(libart_path, serial = serial)
     avd.setRunning(serial)
     return avd
 
