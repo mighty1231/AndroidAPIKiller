@@ -129,11 +129,15 @@ def parse_data(data_fname, callbacks=[]):
         - argument [datetime_object]
     Callback for ping events 8
         - argument [datetime_object]
+    Callback for thread kill 9
+        - agrument [@TODO]
+    Callback for target entring/exiting/unwinding 10/11/12
+        - argument [method_id]
     '''
     if isinstance(callbacks, dict):
-        callbacks = [callbacks.get(i, None) for i in range(10)]
+        callbacks = [callbacks.get(i, None) for i in range(13)]
     elif isinstance(callbacks, list):
-        for _ in range(10-len(callbacks)):
+        for _ in range(13-len(callbacks)):
             callbacks.append(None)
     else:
         raise RuntimeError
@@ -195,6 +199,14 @@ def parse_data(data_fname, callbacks=[]):
                     if callbacks[9]:
                         tid = b2u4(value)
                         callbacks[9](tid)
+                    continue
+                elif tid in [3, 4, 5]:
+                    value = f.read(4)
+                    if len(value) < 4:
+                        break
+                    if callbacks[10-3+tid]:
+                        value = b2u4(value)
+                        callbacks[10-3+tid](value)
                     continue
 
                 value = f.read(4)
@@ -439,7 +451,10 @@ def print_data(prefix, idx = 0):
         lambda timestamp: print('Ping Timestamp %s %d' % \
                 (datetime.datetime.fromtimestamp(timestamp//1000).strftime("%Y/%m/%d %H:%M:%S"),
                  timestamp)),
-        lambda tid: print('Thread %s(%d) was terminated' % (get_thread_name(tid), tid))
+        lambda tid: print('Thread %s(%d) was terminated' % (get_thread_name(tid), tid)),
+        lambda func_id: print('TargetMethod #%d be entered' % func_id),
+        lambda func_id: print('TargetMethod #%d be exited' % func_id),
+        lambda func_id: print('TargetMethod #%d be unwinded' % func_id),
     ])
 
 def inspect_stack(prefix, idx = 0, stack_depth = -1, end_condition = None):

@@ -139,17 +139,23 @@ if __name__ == "__main__":
         # ("com/android/org/conscrypt/OpenSSLECGroupContext", "getContext", "()J"),
 
         # toy
-        ("com/fsck/k9/activity/setup/WelcomeMessage", "hiddenFunc", "()V"),
+        # ("com/fsck/k9/activity/setup/WelcomeMessage", "hiddenFunc", "()V"),
 
         # 0039
         # ("android/app/ActivityThread", "requestRelaunchActivity", "(Landroid/os/IBinder;Ljava/util/List;Ljava/util/List;IZLandroid/content/res/Configuration;Z)V"),
+
+        # 0061
+        # ("org/gnucash/android/ui/util/widget/CalculatorEditText$3", "onClick", "(Landroid/view/View;)V"),
+        
+        # 0061
+        ("org/gnucash/android/ui/account/AccountsActivity$2", "onClick", "(Landroid/view/View;)V")
     ]
     with open(mtdtarget_fname, 'wt') as f:
         for clsname, mtdname, signature in methods:
            f.write("%s\t%s\t%s\t1\n" % (clsname, mtdname, signature)) # 1: method enter
 
     force_clear = args.force_clear
-    i = 3
+    i = 0
     while i < 10:
         aof = ape_output_folder + "_t_{}".format(i)
         mof = mt_output_folder + "_t_{}".format(i)
@@ -162,18 +168,18 @@ if __name__ == "__main__":
         if run_ape_with_mt(args.apk_path, args.avd_name, args.libart_path, args.ape_jar_path, args.mtserver_path,
                 aof, mof, args.running_minutes, force_clear, mtdtarget_destname):
             i += 1
-            force_clear = True
+            force_clear = False
 
-    # i = 0
-    # while i < 10:
-    #     aof = ape_output_folder + "_nt_{}".format(i)
-    #     mof = mt_output_folder + "_nt_{}".format(i)
-    #     if not os.path.isdir(aof):
-    #         print("Creating folder ", aof)
-    #         os.makedirs(aof)
-    #     if not os.path.isdir(mof):
-    #         print("Creating folder ", mof)
-    #         os.makedirs(mof)
-    #     if run_ape_with_mt(args.apk_path, args.avd_name, args.libart_path, args.ape_jar_path, args.mtserver_path,
-    #             aof, mof, args.running_minutes, args.force_clear):
-    #         i += 1
+    i = 0
+    while i < 10:
+        aof = ape_output_folder + "_nt_{}".format(i)
+        mof = mt_output_folder + "_nt_{}".format(i)
+        if not os.path.isdir(aof):
+            print("Creating folder ", aof)
+            os.makedirs(aof)
+        if not os.path.isdir(mof):
+            print("Creating folder ", mof)
+            os.makedirs(mof)
+        if run_ape_with_mt(args.apk_path, args.avd_name, args.libart_path, args.ape_jar_path, args.mtserver_path,
+                aof, mof, args.running_minutes, args.force_clear):
+            i += 1
