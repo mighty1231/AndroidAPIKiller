@@ -1,4 +1,4 @@
-import re, sys
+import re, sys, os
 from .config import getConfig
 from .utils import (
     run_cmd,
