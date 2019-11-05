@@ -49,7 +49,7 @@ def ape_task(avd_name, serial, package_name, output_dir, running_minutes, mt_is_
         kill_mtserver(serial=serial)
         return
     assert mtdtarget
-    run_adb_cmd("push {} {}".format(mtdtarget_fname, mtdtarget_destname))
+    run_adb_cmd("push {} {}".format(mtdtarget_fname, mtdtarget_destname), serial=serial)
     print('ape_task(): Emulator[{}, {}] Running APE with package {}'.format(avd_name, serial, package_name))
     args = '-p {} --running-minutes {} --mt --mtdtarget {} {}--ape sata'.format(package_name, running_minutes, mtdtarget_destname,
         "--no-mtdguide " if no_guide else "")
@@ -156,7 +156,7 @@ if __name__ == "__main__":
 
     force_clear = args.force_clear
     i = 0
-    while i < 10:
+    while i < 2:
         aof = ape_output_folder + "_t_{}".format(i)
         mof = mt_output_folder + "_t_{}".format(i)
         if not os.path.isdir(aof):
@@ -170,17 +170,17 @@ if __name__ == "__main__":
             i += 1
             force_clear = False
 
-    i = 0
-    while i < 10:
-        aof = ape_output_folder + "_nt_{}".format(i)
-        mof = mt_output_folder + "_nt_{}".format(i)
-        if not os.path.isdir(aof):
-            print("Creating folder ", aof)
-            os.makedirs(aof)
-        if not os.path.isdir(mof):
-            print("Creating folder ", mof)
-            os.makedirs(mof)
-        if run_ape_with_mt(args.apk_path, args.avd_name, args.libart_path, args.ape_jar_path, args.mtserver_path,
-                aof, mof, args.running_minutes, force_clear, mtdtarget_destname, no_guide=True):
-            force_clear = False
-            i += 1
+    # i = 0
+    # while i < 10:
+    #     aof = ape_output_folder + "_nt_{}".format(i)
+    #     mof = mt_output_folder + "_nt_{}".format(i)
+    #     if not os.path.isdir(aof):
+    #         print("Creating folder ", aof)
+    #         os.makedirs(aof)
+    #     if not os.path.isdir(mof):
+    #         print("Creating folder ", mof)
+    #         os.makedirs(mof)
+    #     if run_ape_with_mt(args.apk_path, args.avd_name, args.libart_path, args.ape_jar_path, args.mtserver_path,
+    #             aof, mof, args.running_minutes, force_clear, mtdtarget_destname, no_guide=True):
+    #         force_clear = False
+    #         i += 1
