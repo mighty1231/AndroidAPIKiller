@@ -117,7 +117,7 @@ def parse_fieldinfo(fieldinfo_fname):
 class StopParsingData(Exception):
     pass
 
-def parse_data(data_fname, callbacks=[]):
+def parse_data(data_fname, callbacks=[], verbose=True):
     '''
     Callback for method events 0, 1, 2
         - argument [tid, ptr]
@@ -163,10 +163,11 @@ def parse_data(data_fname, callbacks=[]):
         timestamp = b2u8(f.read(8))
 
         assert offset == 20
-        print("MiniTrace Log Version {}".format(version))
-        print("Log with flag {}, timestamp {}".format(
-            hex(log_flag),
-            datetime.datetime.fromtimestamp(timestamp//1000).strftime("%Y/%m/%d %H:%M:%S")))
+        if verbose:
+            print("MiniTrace Log Version {}".format(version))
+            print("Log with flag {}, timestamp {}".format(
+                hex(log_flag),
+                datetime.datetime.fromtimestamp(timestamp//1000).strftime("%Y/%m/%d %H:%M:%S")))
 
         try:
             while True:
@@ -458,6 +459,12 @@ def print_data(prefix, idx = 0):
     ])
 
 def print_target_data(prefix, idx = 0):
+    if idx == 0:
+        dirname, filename = os.path.split(prefix)
+        gp = re.match(r'mt_([0-9]*)_data_([0-9]*)\.bin', filename)
+        if gp:
+            prefix = os.path.join(dirname, 'mt_{}_'.format(gp.group(1)))
+            idx = gp.group(2)
     threads = parse_threadinfo(prefix + "info_t.log")
     methods = parse_methodinfo(prefix + "info_m.log")
     fields = parse_fieldinfo(prefix + "info_f.log")
