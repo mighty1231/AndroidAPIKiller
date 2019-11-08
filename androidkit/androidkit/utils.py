@@ -326,7 +326,7 @@ def run_adb_cmd(orig_cmd, serial=None, timeout=None, retry_cnt=2,
                     else:
                         stdout_callback(o.rstrip())
             if err:
-                for o in err[:idx].split('\n'):
+                for o in err.split('\n'):
                     if stderr_callback is None:
                         print('E: ' + o.rstrip(), file=sys.stderr)
                     else:
