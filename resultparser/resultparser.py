@@ -29,11 +29,11 @@ def cleanupExperiments(directory):
     # return [exptype, expidx, ape_directory, mt_directory]
     ape_logfnames = glob.glob(os.path.join(directory, 'ape_output_*', 'ape_stdout_stderr.txt'))
     # if len(ape_logfnames) != 20:
-    if len(ape_logfnames) != 20:
+    for f in ape_logfnames:
+        print(f)
+    if len(ape_logfnames) <= 2:
         print("Error: currently experiment catched:")
-        for f in ape_logfnames:
-            print(f)
-        return
+        return []
 
     # find match
     ape_logfnames.sort()
