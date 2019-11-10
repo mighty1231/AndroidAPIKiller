@@ -93,7 +93,8 @@ def ape_task(avd_name, serial, package_name, output_dir, running_minutes, mt_is_
             serial = serial,
         )
     # pull ape results
-    ret = run_adb_cmd('pull /data/ape {}'.format(output_dir))
+    run_adb_cmd('rmdir /data/ape/mt_data', serial=serial)
+    ret = run_adb_cmd('pull /data/ape {}'.format(output_dir), serial=serial)
 
 def run_ape_with_mt(apk_path, avd_name, libart_path, ape_jar_path, mtserver_path,
         output_dir, running_minutes, force_clear, mtdtarget, no_guide=False):
