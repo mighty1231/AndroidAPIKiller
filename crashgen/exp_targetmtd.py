@@ -13,7 +13,8 @@ from androidkit import (
     emulator_run_and_wait,
     emulator_setup,
     emulator_wait_for_boot,
-    install_package
+    install_package,
+    RunCmdError
 )
 
 import time
@@ -93,7 +94,10 @@ def ape_task(avd_name, serial, package_name, output_dir, running_minutes, mt_is_
             serial = serial,
         )
     # pull ape results
-    run_adb_cmd('rmdir /data/ape/mt_data', serial=serial)
+    try:
+        run_adb_cmd('shell rmdir /data/ape/mt_data', serial=serial)
+    except RunCmdError as e:
+        print(e.message, file=sys.stderr)
     ret = run_adb_cmd('pull /data/ape {}'.format(output_dir), serial=serial)
 
 def run_ape_with_mt(apk_path, avd_name, libart_path, ape_jar_path, mtserver_path,
