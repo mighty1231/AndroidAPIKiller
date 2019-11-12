@@ -207,9 +207,8 @@ def run_ape_with_mt(apk_path, avd_name, libart_path, ape_path, mtserver_path,
 
     return "notmet"
 
-def run(apk_path, avd_name, methods, libart_path, ape_path, mtserver_path, running_minutes, output_dir, force_clear):
+def run(apk_path, avd_name, total_count, methods, libart_path, ape_path, mtserver_path, running_minutes, output_dir, force_clear):
     i = 0
-    total_count = 2
     notmet_count = 0
     while i < total_count:
         outf = os.path.join(output_dir, "t_{}".format(i))
@@ -278,13 +277,14 @@ def make_output_dir(output_dir):
         os.makedirs(output_dir)
 
     idx = 0
-    while True:
+    while idx < 500:
         new_output_dir = os.path.join(output_dir, 'exp_{}'.format(idx))
         if os.path.isdir(new_output_dir):
            idx += 1
            continue
         os.makedirs(new_output_dir)
         return new_output_dir
+    raise RuntimeError
 
 if __name__ == "__main__":
     import argparse
@@ -296,10 +296,13 @@ if __name__ == "__main__":
     parser.add_argument('--libart_path', default='../bin/libart.so')
     parser.add_argument('--ape_path', default='../bin/ape.jar')
     parser.add_argument('--mtserver_path', default='../bin/mtserver')
+    parser.add_argument('--repeat_count', default='10')
     parser.add_argument('--running_minutes', default='20')
     parser.add_argument('--output_dir', default='../results/continuous')
     args = parser.parse_args()
 
+    repeat_count = int(args.repeat_count)
+    assert repeat_count > 0, repeat_count
     done_experiments = []
     while True:
         expunit = None
@@ -326,6 +329,6 @@ if __name__ == "__main__":
         for clsname, mtdname, signature in expunit.methods:
             print('\t'.join([clsname, mtdname, signature]))
         output_dir = make_output_dir(args.output_dir)
-        print('Output directory', output_dir)
-        run(expunit.apk_path, args.avd_name, expunit.methods, args.libart_path, args.ape_path, args.mtserver_path, args.running_minutes, args.output_dir, args.force_clear)
+        print('Output directory', output_dir, flush=True)
+        run(expunit.apk_path, args.avd_name, repeat_count, expunit.methods, args.libart_path, args.ape_path, args.mtserver_path, args.running_minutes, output_dir, args.force_clear)
         done_experiments.append(expunit)
