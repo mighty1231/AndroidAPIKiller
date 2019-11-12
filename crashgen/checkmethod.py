@@ -27,7 +27,7 @@ def getMethods(fname):
             assert gpcls, lines[i-1]
             ret.append((gpcls.group(1), gpmtd.group(1), gpsig.group(1)))
 
-    return ret
+    return sorted(ret)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Analyze methods in apk')
