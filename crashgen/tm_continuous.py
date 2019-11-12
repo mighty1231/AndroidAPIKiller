@@ -146,60 +146,64 @@ def run_ape_with_mt(apk_path, avd_name, libart_path, ape_path, mtserver_path,
     # feedback
     # 1. method is not found, then stop experiment this (apk, targeting methods)
     # 2. method is not called
-    remaining_methods = list(methods)
+    methods_registered_over_exp = [] # list of registered methods for each run
     logs = []
     try:
         with open(os.path.join(output_dir, "logcat.txt"), 'rt') as f:
-            observe_count = 25 + 5 * len(methods)
+            cur_methods_registered = None
             lazy_methods = []
             for line in f:
                 '''
-                MiniTrace: TargetMethod %s:%s[%s] registered lazy
-                MiniTrace: TargetMethod %s:%s[%s] not found
+                MiniTrace: TargetMethod %s:%s[%s] lazy
                 MiniTrace: TargetMethod %s:%s[%s] registered
+                MiniTrace: TargetMethod %s:%s[%s] registered lazily
                 '''
                 if 'MiniTrace' not in line:
                     continue
 
                 line = line.rstrip()
                 line = line[line.index('MiniTrace'):]
+                if line.startswith("MiniTrace: connection success, received"):
+                    lazy_methods = []
+                    if cur_methods_registered is not None:
+                        methods_registered_over_exp.append(cur_methods_registered)
+                    cur_methods_registered = []
+                    logs.append(line)
+                    continue
                 gp = re.match(r'MiniTrace: TargetMethod (.*):(.*)\[(.*)\] ([a-z ]+)', line)
                 if gp:
                     logs.append(line)
                     clsname, mtdname, signature, status = gp.groups()
-                    if status == 'registered lazy':
-                        assert (clsname, mtdname, signature) in remaining_methods, (remaining_methods, clsname, mtdname, signature)
-                        remaining_methods.remove((clsname, mtdname, signature))
-                        lazy_methods.append(('L' + clsname + ';', mtdname, signature))
+                    if status == 'lazy':
+                        assert (clsname, mtdname, signature) in methods, (clsname, mtdname, signature, methods)
+                        lazy_methods.append((clsname, mtdname, signature))
+                    elif status == 'registered':
+                        assert (clsname, mtdname, signature) in methods, (clsname, mtdname, signature, methods)
+                        cur_methods_registered.append(methods.index((clsname, mtdname, signature)))
                     else:
-                        assert status =='registered', status
-                        if (clsname, mtdname, signature) in remaining_methods:
-                            remaining_methods.remove((clsname, mtdname, signature))
-                        else:
-                            assert (clsname, mtdname, signature) in lazy_methods, (clsname, mtdname, signature, remaining_methods, lazy_methods)
-                            lazy_methods.remove((clsname, mtdname, signature))
-                if len(remaining_methods) == 0 == len(lazy_methods):
-                    break
-                observe_count -= 1
-                if observe_count == 0:
-                    break
-            remaining_methods += lazy_methods
+                        assert status == 'registered lazily', status
+                        assert clsname[0] == 'L' and clsname[-1] == ';', clsname
+                        clsname = clsname[1:-1]
+                        assert (clsname, mtdname, signature) in lazy_methods, (clsname, mtdname, signature, lazy_methods)
+                        cur_methods_registered.append(methods.index((clsname, mtdname, signature)))
     except AssertionError as e:
         print("run_ape_with_mt(): Feedback - failed to register methods")
+        print(methods_registered_over_exp)
         print('\n'.join(logs))
         print(e)
         traceback.print_exc()
         return "method_register"
-
-    if len(methods) != 0 and len(methods) == len(remaining_methods):
+    if all(executed == [] for executed in methods_registered_over_exp):
         print("run_ape_with_mt(): Feedback - failed to register any methods")
         return "method_register"
+    print('run_ape_with_mt(): methods registered...')
+    print(methods_registered_over_exp)
 
     # 2. method is not called
     if no_guide:
         return "success"
 
-    with open(os.path.join(output_dir, 'ape_stdout_stderr.txt'), 'wt') as logf:
+    with open(os.path.join(output_dir, 'ape_stdout_stderr.txt'), 'rt') as logf:
         for line in logf:
             line = line.rstrip()
             if "[APE_MT] MET_TARGET" in line:
@@ -210,6 +214,7 @@ def run_ape_with_mt(apk_path, avd_name, libart_path, ape_path, mtserver_path,
 def run(apk_path, avd_name, total_count, methods, libart_path, ape_path, mtserver_path, running_minutes, output_dir, force_clear):
     i = 0
     notmet_count = 0
+    notfound_count = 0
     while i < total_count:
         outf = os.path.join(output_dir, "t_{}".format(i))
         if not os.path.isdir(outf):
@@ -223,7 +228,10 @@ def run(apk_path, avd_name, total_count, methods, libart_path, ape_path, mtserve
             print("rerun")
             continue
         elif status == "method_register":
-            return
+            # try 2 times
+            if notfound_count == 1 == i:
+                return
+            notfound_count += 1
         if status == "notmet":
             notmet_count += 1
         else:
