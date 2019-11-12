@@ -240,6 +240,7 @@ def run(apk_path, avd_name, total_count, methods, libart_path, ape_path, mtserve
             assert status == "success", status
         i += 1
         force_clear = False
+        print("exp status {} on {}".format(status, outf), flush=True)
 
     if notmet_count == total_count:
         print("Failed to search target methods during {} experiments".format(total_count))
