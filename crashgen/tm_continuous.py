@@ -232,7 +232,7 @@ def run(apk_path, avd_name, total_count, methods, libart_path, ape_path, mtserve
             if notfound_count == 1 == i:
                 return
             notfound_count += 1
-        if status == "notmet":
+        elif status == "notmet":
             notmet_count += 1
         else:
             assert status == "success", status
