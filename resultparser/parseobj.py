@@ -454,16 +454,16 @@ def checkobj(fname):
         jobj = fd.read()
     model = javaobj.loads(jobj)
     graph = model.graph
-    # check0(model, graph)
-    # check1(model, graph)
-    # check3(model, graph)
+    check0(model, graph)
+    check1(model, graph)
+    check3(model, graph)
 
 if __name__ == "__main__":
     if len(sys.argv) >= 2:
         checkobj(sys.argv[1])
 
-        transitions = graph.treeTransitionHistory
-        trees = [GUITree.init(t.source) for t in transitions]
-        tree = trees[0]
-        print(tree.getCurrentState())
-        state = GUITreeToState(model, graph, tree)
+        # transitions = graph.treeTransitionHistory
+        # trees = [GUITree.init(t.source) for t in transitions]
+        # tree = trees[0]
+        # print(tree.getCurrentState())
+        # state = GUITreeToState(model, graph, tree)
