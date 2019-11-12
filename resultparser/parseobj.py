@@ -61,194 +61,137 @@ Start s1 s2 ... targetState ~ si ~ targetState ~ sj end
     Name[] currentNames; // names for the nodes at the same index in currentNodes
     Object[] currentNodes; // An element of this array may be a node or an array of nodes
 '''
-
 import sys
 import javaobj
+from common import readJavaList, JavaClass
+from tree import GUITree, GUITreeBuilder_getStateKey
+from model import StateKey, State
+from naming import StateNamingManager
 
 graph = None
 model = None
 
+class Model(JavaClass):
+    def __init__(self, model):
+        super(Model, self).__init__(model, "com.android.commands.monkey.ape.model.Model")
+
+    def rebuild(self, tree):
+        '''
+        GUITreeBuilder treeBuilder = new GUITreeBuilder(namingManager, tree);
+        return treeBuilder.getGUITree();
+        '''
+        tree = GUITree.init(tree)
+        namingManager = StateNamingManager.init(self.namingManager)
+        activity = tree.getActivityName()
+        document = tree.getDocument()
+
+        # GUITreeBuilder.rebuildGUITree()
+        current = namingManager.getNaming(tree)
+        results = current.naming(tree, True)
+        tree.setCurrentNaming(current, results.getNames(), results.getNodes())
+        tree.setCurrentState(None)
+
+        return tree
+
+    def getState(self, tree):
+        naming = tree.getCurrentNaming()
+        stateKey = GUITreeBuilder_getStateKey(naming, tree)
+        state = Graph.init(self.graph).getOrCreateState(stateKey)
+        # tree.setCurrentState(state)
+        return state
+
+class Graph(JavaClass):
+    def __init__(self, grpah):
+        super(Graph, self).__init__(graph, "com.android.commands.monkey.ape.model.Graph")
+
+    def getOrCreateState(self, stateKey):
+        stateKey = StateKey.init(stateKey)
+        state = None
+        for key, value in self.keyToState.items():
+            if StateKey(key) == stateKey:
+                state = value
+        if state is None:
+            print('Warning: unknown state, newly create state')
+            return None
+        return State.init(state)
+
+def GUITreeToState(model, graph, tree):
+    # Model.rebuild(GUITree tree)
+    # GetState(tree)
+    model = Model.init(model)
+    namingManager = model.namingManager
+    return model.getState(model.rebuild(tree))
 
 
+    # # Naming getNaming(GUITree tree) from AbstractNamingManager
+    # if id(guitree) in map(id, namingManager.treeToNaming.keys()):
+    #     return namingManager.treeToNaming[guitree]
 
-def Describe(javaobj):
-    # clsname = javaobj.get_class().name
-    # if clsname == 'State':
-    #     return State_toString(javaobj)
-    # elif clsname == 
-    pass
+    # componentName = (guitree.activityPackageName, guitree.activityClassName)
+    # guitreenode = guitree.rootNode
+    # document = treeNodeToXmlNode(guitreenode)
 
-def Namer(obj):
-    if obj is None:
-        return None
-    if obj.get_class().name == 'com.android.commands.monkey.ape.naming.EmptyNamer':
-        return ''
-    if obj.get_class().name == 'com.android.commands.monkey.ape.naming.ActionPatchNamer':
-        return ('ActionPatchNamer', Namer(obj.baseNamer))
-    elif obj.get_class().name == 'com.android.commands.monkey.ape.naming.TypeNamer':
-        return 'TypeNamer' # TypeNamer[type,resource-id]
-    elif obj.get_class().name == 'com.android.commands.monkey.ape.naming.CompoundNamer':
-        return ('CompoundNamer', tuple(map(Namer, obj.namers)))
-    elif obj.get_class().name == 'com.android.commands.monkey.ape.naming.IndexNamer':
-        return 'IndexNamer' # IndexNamer[index]
-    elif obj.get_class().name == 'com.android.commands.monkey.ape.naming.ParentNamer':
-        return ('ParentNamer', Namer(obj.namer))
-    elif obj.get_class().name == 'com.android.commands.monkey.ape.naming.TextNamer':
-        return 'TextNamer' # TextNamer[text,content-desc]
-    elif obj.get_class().name == 'com.android.commands.monkey.ape.naming.AncestorNamer$AncestorName':
-        return ('AncestorNamer', Namer(obj.namer))
-    else:
-        raise NotImplementedError(obj.get_class().name)
+    # namingManager
+    # tree.document
+    # tree.activityName
+    
+    # # GUITreeBuilder.rebuildGUITree
+    # # Naming current = namingManager.getNaming(tree);
+    # current = None
+    # if 1:
+    #     # getBaseNaming
+    #     source = namingManager.namingFactory.base
+    #     while 1:
+    #         state = getStateKey(source, tree)
+    #         if source not in namingManager.namingToEdge:
+    #             target = None
+    #         else:
+    #             tmp = namingManager.namingToEdge[source]
+    #             if state not in tmp:
+    #                 target = None
+    #             else:
+    #                 target = namingManager.namingToEdge[source][state]
+    #         if target is None:
+    #             current = source
+    #             break
+    #         source = target
 
-def Namelet(obj):
-    if obj is None:
-        return None
-    assert obj.get_class().name == 'com.android.commands.monkey.ape.naming.Namelet', obj
-    return (obj.type.constant, obj.exprStr, Namer(obj.namer))
+    # # NamingResult results = current.naming(tree, true);
+    # if 1:
+    #     results = Naming.init(current).namingInternal_DocumentBoolean(document, True)
+    #     # tree.setCurrentNaming(current, results.names, results.nodes);
+    #     if 1:
+    #         tree.currentNaming = current
+    #         tree.currentNames = results.names
+    #         tree.currentNode = results.nodes
+    #     tree.currentState = None
 
-def Naming(obj):
-    if obj is None:
-        return None
-    assert obj.get_class().name == 'com.android.commands.monkey.ape.naming.Naming', obj
-    return set(Namelet(nl) for nl in obj.namelets)
+    # # Model.checkAndAddStateData
+    # if 1:
+    #     # Naming naming = tree.getCurrentNaming();
+    #     naming = tree.currentNaming
 
-def StateKey(obj):
-    if obj is None:
-        return None
-    assert obj.get_class().name == 'com.android.commands.monkey.ape.model.StateKey', obj
-    return (obj.activity, Naming(obj.naming), [Name_toString(name) for name in obj.widgets])
+    #     # StateKey stateKey = GUITreeBuilder.getStateKey(naming, tree);
+    #     stateKey = StateKey.init(naming, tree.activityName, tree.currentNames)
 
-def State(obj):
-    if obj is None:
-        return None
-    assert obj.get_class().name == 'com.android.commands.monkey.ape.model.State', obj
-    return StateKey(obj.stateKey)
-
-def describeGUITree(guitree):
-    print('GUITree ---')
-    print('  timestamp', guitree.timestamp)
-    print('  activityClassName', guitree.activityClassName)
-    print('  activityPackageName', guitree.activityPackageName)
-    print('  rootNode', guitree.rootNode)
-
-namerPatches = [
-    "",
-    "enabled=true;",
-    "clickable=true;",
-    "enabled=true;clickable=true;",
-    "checkable=true;",
-    "enabled=true;checkable=true;",
-    "clickable=true;checkable=true;",
-    "enabled=true;clickable=true;checkable=true;",
-    "long-clickable=true;",
-    "enabled=true;long-clickable=true;",
-    "clickable=true;long-clickable=true;",
-    "enabled=true;clickable=true;long-clickable=true;",
-    "checkable=true;long-clickable=true;",
-    "enabled=true;checkable=true;long-clickable=true;",
-    "clickable=true;checkable=true;long-clickable=true;",
-    "enabled=true;clickable=true;checkable=true;long-clickable=true;",
-    "scrollable=true;",
-    "enabled=true;scrollable=true;",
-    "clickable=true;scrollable=true;",
-    "enabled=true;clickable=true;scrollable=true;",
-    "checkable=true;scrollable=true;",
-    "enabled=true;checkable=true;scrollable=true;",
-    "clickable=true;checkable=true;scrollable=true;",
-    "enabled=true;clickable=true;checkable=true;scrollable=true;",
-    "long-clickable=true;scrollable=true;",
-    "enabled=true;long-clickable=true;scrollable=true;",
-    "clickable=true;long-clickable=true;scrollable=true;",
-    "enabled=true;clickable=true;long-clickable=true;scrollable=true;",
-    "checkable=true;long-clickable=true;scrollable=true;",
-    "enabled=true;checkable=true;long-clickable=true;scrollable=true;",
-    "clickable=true;checkable=true;long-clickable=true;scrollable=true;",
-    "enabled=true;clickable=true;checkable=true;long-clickable=true;scrollable=true;",
-]
-assert len(namerPatches) == 32
-
-def Name_toString(nm):
-    if nm is None or nm.get_class().name == 'com.android.commands.monkey.ape.naming.EmptyNamer$1':
-        return ''
-    if nm.get_class().name == 'com.android.commands.monkey.ape.naming.ActionPatchNamer$ActionPatchName':
-        return Name_toString(nm.baseName) + namerPatches[nm.patch]
-    elif nm.get_class().name == 'com.android.commands.monkey.ape.naming.TypeNamer$TypeName':
-        if nm.resourceId is None or len(nm.resourceId) == 0:
-            return 'class={};'.format(nm.klass)
-        return 'class={};resource-id={};'.format(nm.klass, nm.resourceId)
-    elif nm.get_class().name == 'com.android.commands.monkey.ape.naming.CompoundNamer$CompoundName':
-        return ''.join(Name_toString(c) for c in nm.names)
-    elif nm.get_class().name == 'com.android.commands.monkey.ape.naming.IndexNamer$IndexName':
-        return 'index={};'.format(nm.index)
-    elif nm.get_class().name == 'com.android.commands.monkey.ape.naming.ParentNamer$ParentName':
-        return '{}/{}'.format(Name_toString(nm.parentName), Name_toString(nm.localName))
-    elif nm.get_class().name == 'com.android.commands.monkey.ape.naming.TextNamer$TextName':
-        if nm.contentDesc is None or len(nm.contentDesc) == 0:
-            return 'text={};'.format(nm.text)
-        return 'text={};content-desc={};'.format(nm.text, nm.contentDesc)
-    elif nm.get_class().name == 'com.android.commands.monkey.ape.naming.AncestorNamer$AncestorName':
-        return '/{}'.format('/'.join([Name_toString(c) for c in nm.names]))
-    else:
-        raise NotImplementedError(nm.get_class().name)
-
-def Namelet_toString(nl):
-    return '[{}][{}][{]][{}][{}]'.format(
-        nl.type.constant,
-        nl.depth,
-        nl.exprStr,
-        nl.namer.get_class().name,
-        Namelet_toString(nl.parent))
-
-def State_toString(st):
-    # State extends GraphElement
-    # super.toString() + this.stateKey.toString() + "[A=" + this.actions.length + "]";
-    stateKey = st.stateKey
-    def getGraphId(elem):
-        assert isinstance(elem.id, javaobj.JavaString)
-        return elem.id
-    ret = '{}[{},{}][{}]'.format(getGraphId(st),
-            st.firstVisitTimestamp, st.lastVisitTimestamp,
-            st.visitedCount)
-    ret += '{}@{}@{}@[W={}]'.format(stateKey.activity, stateKey.hashCode,
-            stateKey.naming.namingName, len(stateKey.widgets))
-    ret += '[A={}]'.format(len(st.actions))
-    # additional for naming namelets
-    ret += '/'.join([','.join([e.constant for e in nl.namer.namerType.elements]) for nl in stateKey.naming.namelets])
-
-    return ret
-
-def GUITreeNode_getIndexPath(node):
-    if node.indexPath:
-        return node.indexPath
-    if node.parent:
-        return '{}-{}'.format(GUITreeNode_getIndexPath(node.parent), node.index)
-    return str(node.index)
-
-def describeGUITreeNode(node):
-    print('IndexPath [{}]'.format(GUITreeNode_getIndexPath(node)))
-    print(' - resourceId', node.resourceId)
-    print(' - className', node.className)
-    print(' - packageName', node.packageName)
+    #     # State state = graph.getOrCreateState(stateKey);
+    #     for prevStateKey in readJavaList(graph.keyToState):
+    #         if stateKey == StateKey.init(stateKey):
+    #             return graph.keyToState[prevStateKey]
+    # return None
 
 def describeGUITreeAction(action):
     typ = action.action.type.constant
     print('Action type {}'.format(typ))
     guitreenode = action.node
     if guitreenode:
-        describeGUITreeNode(guitreenode)
+        GUITreeNode(guitreenode).describe()
 
 def describeActionRecord(ar):
     if ar.modelAction:
         print('ModelAction type', ar.modelAction.type.constant)
     if ar.guiAction:
         describeGUITreeAction(ar.guiAction)
-
-def readJavaList(l):
-    if l.get_class().name == 'java.util.Collections$SingletonList':
-        return [l.element]
-    else:
-        assert l.get_class().name == 'java.util.ArrayList', l.get_class().name
-        return l
 
 def getTargetStates(model, graph):
     guitrees = readJavaList(graph.metTargetMethodGUITrees)
@@ -283,97 +226,9 @@ def getTargetStates_nt(model, graph):
 
     return ret
 
-def getSubsequences(model, graph, verbose = False):
-    # evaluate subsequences
-    # transitions from graph.treeTransitionHistory
-    # subsequences = [[transition#1, transition#2], [transition#3, transition#4, ...] ...]
-    subsequences = []
-    nonModelActions = ['EVENT_START', 'EVENT_RESTART', 'EVENT_CLEAN_RESTART',
-        'FUZZ', 'EVENT_ACTIVATE', 'PHANTOM_CRASH', 'MODEL_BACK']
-    nonModelActionsWOBack = nonModelActions[:-1]
-    curguitree = None
-    records = model.actionHistory
-    record_idx = 0
-    last_match_idx = 0
-    for i, gt in enumerate(readJavaList(graph.treeTransitionHistory)):
-        # evaluate matching between ActionRecords and GUITreeTransitions
-        # Assumption: ActionRecords' actions contain all of GUITreeTransitions' actions.
-        if verbose:
-            print('i, record_idx', i, record_idx)
-        if records[record_idx].guiAction is None or (id(gt.action) != id(records[record_idx].guiAction) and records[record_idx].modelAction.type.constant == 'MODEL_BACK'):
-            if verbose:
-                print('strategy #1')
-            if gt.action.action.type.constant == 'MODEL_BACK':
-                actionsToAvoid = nonModelActionsWOBack
-                curidx = last_match_idx + 1
-            else:
-                actionsToAvoid = nonModelActions
-                curidx = record_idx
-            nxtNonModelActionIdx = []
-            while curidx < len(records) and records[curidx].modelAction.type.constant in actionsToAvoid:
-                nxtNonModelActionIdx.append(curidx)
-                curidx += 1
-            if verbose:
-                print('strategy #1 ', nxtNonModelActionIdx)
-            if nxtNonModelActionIdx:
-                curguitree = None
-                record_idx = nxtNonModelActionIdx[-1] + 1
-        # if there is no match, check next nonModelAction group induced a crash
-        elif id(gt.action) != id(records[record_idx].guiAction):
-            if verbose:
-                print('strategy #2')
-            if gt.action.action.type.constant == 'MODEL_BACK':
-                actionsToAvoid = nonModelActionsWOBack
-                curidx = last_match_idx + 1
-            else:
-                actionsToAvoid = nonModelActions
-                curidx = record_idx + 1
-            nxtNonModelActionIdx = []
-            crashed_or_back = False
-            while curidx < len(records) and records[curidx].modelAction.type.constant in actionsToAvoid:
-                nxtNonModelActionIdx.append(curidx)
-                if records[curidx].modelAction.type.constant in ['MODEL_BACK', 'PHANTOM_CRASH']:
-                    crashed_or_back = True
-                # print('records[curidx].modelAction.type.constant', records[curidx].modelAction.type.constant, crashed_or_back)
-                curidx += 1
-            if verbose:
-                print('strategy #2 ', nxtNonModelActionIdx)
-            if crashed_or_back:
-                curguitree = None
-                record_idx = nxtNonModelActionIdx[-1] + 1
-            else:
-                print('ActionOnTransition #{} ----'.format(i))
-                describeGUITreeAction(gt.action)
-                print()
-                print('ActionRecords #{} ----'.format(record_idx))
-                describeActionRecord(records[record_idx])
-                print()
-                return None
-        # DEBUG
-        # if gt.source:
-        #     print('source')
-        #     describeGUITree(gt.source)
-        #     for name in gt.source.currentNames:
-        #         print(' ', Name_toString(name))
-        # if gt.target:
-        #     print('target')
-        #     describeGUITree(gt.target)
-        #     for name in gt.target.currentNames:
-        #         print(' ', Name_toString(name))
-
-        # curguitree is target state of previous transition
-        if curguitree is None:
-            subsequences.append([gt])
-            last_match_idx = record_idx
-        else:
-            assert id(curguitree) == id(gt.source)
-            subsequences[-1].append(gt)
-            last_match_idx = record_idx
-        curguitree = gt.target
-        record_idx += 1
-    return subsequences
-
-def getSubsequences2(model, graph):
+def getSubsequences(model, graph):
+    # nonModelActions = ['EVENT_START', 'EVENT_RESTART', 'EVENT_CLEAN_RESTART',
+    #     'FUZZ', 'EVENT_ACTIVATE', 'PHANTOM_CRASH', 'MODEL_BACK']
     records = model.actionHistory
     transitions = graph.treeTransitionHistory
     curguitree = None
@@ -449,7 +304,7 @@ def check1(model, graph):
     s2o = graph.stateToOutStateTransitions
     print('#Target States {} #Target Transitions {}'.format(len(targets), len(targetTransitions)))
     for target in targets:
-        print(' - state {} numIn {} numOut {}'.format(State_toString(target), len(s2i[target]), len(s2o[target])))
+        print(' - state {} numIn {} numOut {}'.format(State.init(target), len(s2i[target]), len(s2o[target])))
 
     # describe targetTransitions
     targetTransitions
@@ -546,7 +401,7 @@ def check3(model, graph):
             return '<SubSequence len={}, states={}>'.format(len(self.transitions),
                 ','.join(map(lambda s:str(s.firstVisitTimestamp), self.getStateSequence())))
 
-    subsequences_list = getSubsequences2(model, graph)
+    subsequences_list = getSubsequences(model, graph)
     if subsequences_list is None:
         sys.exit(1)
     subseqCounter = dict()
@@ -599,9 +454,16 @@ def checkobj(fname):
         jobj = fd.read()
     model = javaobj.loads(jobj)
     graph = model.graph
-    check0(model, graph)
-    check1(model, graph)
-    check3(model, graph)
+    # check0(model, graph)
+    # check1(model, graph)
+    # check3(model, graph)
 
 if __name__ == "__main__":
-    checkobj(sys.argv[1])
+    if len(sys.argv) >= 2:
+        checkobj(sys.argv[1])
+
+        transitions = graph.treeTransitionHistory
+        trees = [GUITree.init(t.source) for t in transitions]
+        tree = trees[0]
+        print(tree.getCurrentState())
+        state = GUITreeToState(model, graph, tree)
