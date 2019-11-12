@@ -186,6 +186,8 @@ def run_ape_with_mt(apk_path, avd_name, libart_path, ape_path, mtserver_path,
                         clsname = clsname[1:-1]
                         assert (clsname, mtdname, signature) in lazy_methods, (clsname, mtdname, signature, lazy_methods)
                         cur_methods_registered.append(methods.index((clsname, mtdname, signature)))
+            if cur_methods_registered is not None:
+                methods_registered_over_exp.append(cur_methods_registered)
     except AssertionError as e:
         print("run_ape_with_mt(): Feedback - failed to register methods")
         print(methods_registered_over_exp)
@@ -251,8 +253,8 @@ def run(apk_path, avd_name, total_count, methods, libart_path, ape_path, mtserve
             os.makedirs(outf)
         status = run_ape_with_mt(apk_path, avd_name, libart_path, ape_path, mtserver_path,
                 outf, running_minutes, force_clear, methods, no_guide=True)
-        assert status in ["rerun", "success"]
-        if status == "success":
+        assert status in ["rerun", "method_register", "success"], status
+        if status == ["success", "method_register"]:
             i += 1
 
 class ExperimentUnit:
