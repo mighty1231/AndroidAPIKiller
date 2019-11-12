@@ -1,0 +1,12 @@
+1
+../data/apk_with_reports/0415/ImapNote2-release.apk
+com/Pau/ImapNotes2/Sync/SyncUtils	GetOneNote	(Ljava/io/File;Ljavax/mail/Message;Lcom/Pau/ImapNotes2/Data/NotesDb;Ljava/lang/String;Ljava/lang/String;Z)V
+
+1
+../data/apk_with_reports/0223/aps_1_2_0_26.apk
+com/zeapo/pwdstore/PasswordStore	deletePassword	(Lcom/zeapo/pwdstore/utils/PasswordRecyclerAdapter;I)V
+
+1
+../data/apk_with_reports/0361/app-release.apk
+com/nbossard/packlist/process/saving/PrefsSavingModule	updateItem	(Lcom/nbossard/packlist/model/Item;)V
+
