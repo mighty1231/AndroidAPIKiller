@@ -3,6 +3,7 @@ import argparse
 import csv
 import glob
 import re
+from parseobj import checkobj
 
 '''
 Task 1. Given experiment folder (marked/non-marked common)
@@ -91,7 +92,6 @@ def analyzeMarked(directory):
     '''
     print information for marked
     '''
-    from parseobj import checkobj
     experiments = cleanupExperiments(directory)
     for exptype, expidx, directory in experiments:
         if exptype == 'nt':
@@ -104,6 +104,10 @@ def analyzeMarked(directory):
             continue
         checkobj(models[0])
 
+def analyzeMarkedAll(directory):
+    for model in directory:
+        print('[Analyzing model {}]'.format(model))
+        checkobj(model)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Result parser')
@@ -115,10 +119,15 @@ if __name__ == "__main__":
     marked_parser = subparsers.add_parser('marked')
     marked_parser.add_argument('directory', type=str)
 
+    markedall_parser = subparsers.add_parser('markedall')
+    markedall_parser.add_argument('pattern', nargs='+')
+
     args = parser.parse_args()
     if args.func == "common":
         analyzeCommon(args.directory)
     elif args.func == "marked":
         analyzeMarked(args.directory)
+    elif args.func == "markedall":
+        analyzeMarkedAll(args.pattern)
     else:
         raise RuntimeError("func {} is not implemented".format(args.func))
