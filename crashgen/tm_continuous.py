@@ -318,6 +318,7 @@ if __name__ == "__main__":
     repeat_count = int(args.repeat_count)
     assert repeat_count > 0, repeat_count
     done_experiments = []
+    force_clear = args.force_clear
     while True:
         expunit = None
         with open(args.exp_file, 'rt') as f:
@@ -344,5 +345,6 @@ if __name__ == "__main__":
             print('\t'.join([clsname, mtdname, signature]))
         output_dir = make_output_dir(args.output_dir)
         print('Output directory', output_dir, flush=True)
-        run(expunit.apk_path, args.avd_name, repeat_count, expunit.methods, args.libart_path, args.ape_path, args.mtserver_path, args.running_minutes, output_dir, args.force_clear)
+        run(expunit.apk_path, args.avd_name, repeat_count, expunit.methods, args.libart_path, args.ape_path, args.mtserver_path, args.running_minutes, output_dir, force_clear)
         done_experiments.append(expunit)
+        force_clear = False
