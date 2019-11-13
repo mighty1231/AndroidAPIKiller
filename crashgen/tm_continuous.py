@@ -194,31 +194,31 @@ def run_ape_with_mt(apk_path, avd_name, libart_path, ape_path, mtserver_path,
         print('\n'.join(logs))
         print(e)
         traceback.print_exc()
-        return "method_register"
+        return "unregistered"
     if all(executed == [] for executed in methods_registered_over_exp):
         print("run_ape_with_mt(): Feedback - failed to register any methods")
-        return "method_register"
+        return "unregistered"
     print('run_ape_with_mt(): methods registered...')
     print(methods_registered_over_exp)
 
-    # 2. method is not called
     if no_guide:
         return "success"
 
+    # 2. method is not called
     with open(os.path.join(output_dir, 'ape_stdout_stderr.txt'), 'rt') as logf:
         for line in logf:
             line = line.rstrip()
             if "[APE_MT] MET_TARGET" in line:
                 return "success"
 
-    return "notmet"
+    return "notsearched"
 
 def run(apk_path, avd_name, total_count, methods, libart_path, ape_path, mtserver_path, running_minutes, output_dir, force_clear):
-    i = 0
-    notmet_count = 0
-    notfound_count = 0
-    while i < total_count:
-        outf = os.path.join(output_dir, "t_{}".format(i))
+    expidx = 0
+    notsearched_count = 0
+    unregistered_count = 0
+    while expidx < total_count:
+        outf = os.path.join(output_dir, "t_{}".format(expidx))
         if not os.path.isdir(outf):
             print("Creating folder ", outf)
             os.makedirs(outf)
@@ -227,36 +227,39 @@ def run(apk_path, avd_name, total_count, methods, libart_path, ape_path, mtserve
         if status == "install":
             return
         elif status == "rerun":
-            print("rerun")
+            print("exp status {} on {}".format(status, outf), flush=True)
             continue
-        elif status == "method_register":
+        elif status == "unregistered":
             # try 2 times
-            if notfound_count == 1 == i:
+            if unregistered_count == 1 == expidx:
                 return
-            notfound_count += 1
-        elif status == "notmet":
-            notmet_count += 1
+            unregistered_count += 1
+        elif status == "notsearched":
+            notsearched_count += 1
         else:
             assert status == "success", status
-        i += 1
+        expidx += 1
         force_clear = False
         print("exp status {} on {}".format(status, outf), flush=True)
 
-    if notmet_count == total_count:
+    if notsearched_count == total_count:
         print("Failed to search target methods during {} experiments".format(total_count))
         return
 
-    i = 0
-    while i < total_count:
-        outf = os.path.join(output_dir, "nt_{}".format(i))
+    expidx = 0
+    while expidx < total_count:
+        outf = os.path.join(output_dir, "nt_{}".format(expidx))
         if not os.path.isdir(outf):
             print("Creating folder ", outf)
             os.makedirs(outf)
         status = run_ape_with_mt(apk_path, avd_name, libart_path, ape_path, mtserver_path,
                 outf, running_minutes, force_clear, methods, no_guide=True)
-        assert status in ["rerun", "method_register", "success"], status
-        if status == ["success", "method_register"]:
-            i += 1
+        if status == "rerun":
+            print("exp status {} on {}".format(status, outf), flush=True)
+            continue
+        assert status in ["unregistered", "success"], status
+        expidx += 1
+        print("exp status {} on {}".format(status, outf), flush=True)
 
 class ExperimentUnit:
     def __init__(self, apk_path, methods):
