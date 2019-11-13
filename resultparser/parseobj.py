@@ -1,8 +1,9 @@
 ''' What to do?
 1. Number of InTransitions and OutTransitions for targetState
-2. First met of targeting ~ Total count for transition may be correlated
+2. Subsequences with crash
 3. After targetState is met, What kind of next transitions would be there before targetState..?
-4. precision / recall on GUITreeTransition ~ metTarget
+4. First met of targeting ~ Total count for transition may be correlated
+5. precision / recall on GUITreeTransition ~ metTarget
 
 Start s1 s2 ... targetState ~ si ~ targetState ~ sj end
 
@@ -204,7 +205,8 @@ def getTargetStates(model, graph):
 def getTargetTransitions(model, graph):
     ret = []
     for gt in graph.treeTransitionHistory:
-        if gt.metTargetMethodScore == 0:
+        assert gt.hasMetTargetMethod in [True, False]
+        if gt.hasMetTargetMethod:
             ret.append(gt)
 
     return ret
@@ -226,6 +228,132 @@ def getTargetStates_nt(model, graph):
 
     return ret
 
+def reportCrash(crash):
+    import datetime
+    print("Crash at {}".format(
+            datetime.datetime.fromtimestamp(crash.timeMillis / 1000).strftime("%Y-%m-%d %H:%M:%S")))
+    print("Short Message", crash.shortMsg)
+    print("Long Message", crash.longMsg)
+    print("Stacktrace")
+    for line in crash.stackTrace.split('\n'):
+        print(" $", line)
+
+class Subsequence:
+    idx = 0
+    def __init__(self, gt):
+        self.treeTransitions = [gt]
+        self.actionRecordsAtEnd = []
+        self.idx = Subsequence.idx
+        Subsequence.idx += 1
+
+    def append(self, gt):
+        self.treeTransitions.append(gt)
+
+    def crashReport(self):
+        if len(self.actionRecordsAtEnd) == 0:
+            return
+        directCrash = self.actionRecordsAtEnd[0].modelAction.type.constant == 'PHANTOM_CRASH'
+        if directCrash:
+            print("Subsequence #{} CRASH".format(self.idx))
+            reportCrash(self.actionRecordsAtEnd[0].modelAction.crash)
+        else:
+            actions = []
+            for ar in self.actionRecordsAtEnd:
+                action = ar.modelAction
+                constant = action.type.constant
+                actions.append(action)
+                if constant == 'PHANTOM_CRASH':
+                    print('Subsequence #{} indirect CRASH'.format(self.idx))
+                    print(' - records [{}]'.format(' / '.join(map(lambda act:act.type.constant, actions))))
+                    reportCrash(action.crash)
+
+    def appendActionRecord(self, act):
+        self.actionRecordsAtEnd.append(act)
+
+    def __getattr__(self, attr):
+        return self.treeTransitions.__getattr__(attr)
+
+    def __getitem__(self, item):
+        return self.treeTransitions.__getitem__(item)
+
+    def __len__(self):
+        return self.treeTransitions.__len__()
+
+class TargetSubsequence:
+    def __init__(self, tr = None):
+        self.transitions = []
+        if tr is not None:
+            self.transitions.append(tr)
+        self._hash = None
+        self._score = None
+        self._ssq = None
+
+    def append(self, tr):
+        assert tr.get_class().name == "com.android.commands.monkey.ape.tree.GUITreeTransition"
+        self.transitions.append(tr)
+
+    def __hash__(self):
+        if self._hash is None:
+            val = 0
+            for tr in self.transitions:
+                val += hash(tr.stateTransition)
+                val *= 31
+                val &= 0xFFFFFFFF
+            self._hash = val
+        return self._hash
+
+    def __eq__(self, other):
+        if len(other.transitions) != len(self.transitions):
+            return False
+        return all(id(self.transitions[i].stateTransition) == id(other.transitions[i].stateTransition) \
+                for i in range(len(self.transitions)))
+
+    @property
+    def score(self):
+        if self._score is not None:
+            return self._score
+        score = 0
+        if id(self.transitions[0].source.currentState) in targetStateIds:
+            score += 2
+        if id(self.transitions[-1].target.currentState) in targetStateIds:
+            score += 1
+        self._score = score
+        return score
+
+    def __lt__(self, other):
+        selfScore = self.score
+        otherScore = other.score
+        if selfScore == otherScore:
+            if len(self.transitions) == len(other.transitions):
+                for setr, ottr in zip(self.transitions, other.transitions):
+                    if id(setr.stateTransition) != id(ottr.stateTransition):
+                        seFirstVisitTimestamp = setr.stateTransition.firstVisitTimestamp
+                        otFirstVisitTimestamp = ottr.stateTransition.firstVisitTimestamp
+                        assert seFirstVisitTimestamp != otFirstVisitTimestamp
+                        return seFirstVisitTimestamp < otFirstVisitTimestamp
+                return False
+            return len(self.transitions) < len(other.transitions)
+        return selfScore < otherScore
+
+    def getStateSequence(self):
+        # just state sequence, but consecutive same states are compressed to single state
+        if self._ssq is not None:
+            return self._ssq
+
+        ret = [self.transitions[0].source.currentState]
+        for tr in self.transitions:
+            state = tr.target.currentState
+            if id(state) != id(ret[-1]):
+                ret.append(state)
+
+        self._ssq = ret
+        return ret
+
+    def __repr__(self):
+        # print states
+        return '<SubSequence len={}, states={}>'.format(len(self.transitions),
+            ','.join(map(lambda s:str(s.firstVisitTimestamp), self.getStateSequence())))
+
 def getSubsequences(model, graph):
     # nonModelActions = ['EVENT_START', 'EVENT_RESTART', 'EVENT_CLEAN_RESTART',
     #     'FUZZ', 'EVENT_ACTIVATE', 'PHANTOM_CRASH', 'MODEL_BACK']
@@ -240,9 +368,11 @@ def getSubsequences(model, graph):
         cur_action_id = id(cur_action)
         tmp_idx = ar_idx
         while not (records[tmp_idx].guiAction and id(records[tmp_idx].guiAction) == cur_action_id):
+            if sequences:
+                sequences[-1].appendActionRecord(records[tmp_idx])
             tmp_idx += 1
         if curguitree is None or tmp_idx != ar_idx:
-            sequences.append([gt])
+            sequences.append(Subsequence(gt))
         else:
             assert id(curguitree) == id(gt.source), (tr_idx, ar_idx)
             sequences[-1].append(gt)
@@ -309,9 +439,47 @@ def check1(model, graph):
     # describe targetTransitions
     targetTransitions
 
-
-# 2. First met of targeting ~ Total count for transition may be correlated
+# 2. Subsequeces with crashes
 def check2(model, graph):
+    subsequences = getSubsequences(model, graph)
+    for subsequence in subsequences:
+        subsequence.crashReport()
+    return subsequences
+
+
+# 3. After targetState is met, What kind of next transitions would be there before targetState..?
+def check3(model, graph, subsequences):
+    targetStates = getTargetStates(model, graph)
+    targetStateIds = list(map(id, targetStates))
+
+    if subsequences is None:
+        sys.exit(1)
+    subseqCounter = dict()
+    for seq in subsequences:
+        targetSubsequence = TargetSubsequence(seq[0])
+        for tr in seq[1:]:
+            if id(tr.source.currentState) in targetStateIds:
+                try:
+                    subseqCounter[targetSubsequence] += 1
+                except KeyError:
+                    subseqCounter[targetSubsequence] = 1
+                targetSubsequence = TargetSubsequence(tr)
+            else:
+                targetSubsequence.append(tr)
+        try:
+            subseqCounter[targetSubsequence] += 1
+        except KeyError:
+            subseqCounter[targetSubsequence] = 1
+    print("Num subsequences", len(subseqCounter))
+    print("Subsequences called >= 3 times :", len([0 for seq in subseqCounter if subseqCounter[seq] >= 3]))
+    for seq in sorted(subseqCounter.keys(), key=lambda k:subseqCounter[k]):
+        if subseqCounter[seq] >= 3:
+            print(subseqCounter[seq], seq)
+
+    return subsequences
+
+# 4. First met of targeting ~ Total count for transition may be correlated
+def check4(model, graph):
     transitions = graph.treeTransitionHistory
     metTargetTransition = None
     for t in transitions:
@@ -320,113 +488,6 @@ def check2(model, graph):
 
     if metTargetTransition is None:
         return
-
-# 3. After targetState is met, What kind of next transitions would be there before targetState..?
-def check3(model, graph):
-    targetStates = getTargetStates(model, graph)
-    targetStateIds = list(map(id, targetStates))
-
-    class SubSequence:
-        def __init__(self, tr = None):
-            self.transitions = []
-            if tr is not None:
-                self.transitions.append(tr)
-            self._hash = None
-            self._score = None
-            self._ssq = None
-
-        def append(self, tr):
-            assert tr.get_class().name == "com.android.commands.monkey.ape.tree.GUITreeTransition"
-            self.transitions.append(tr)
-
-        def __hash__(self):
-            if self._hash is None:
-                val = 0
-                for tr in self.transitions:
-                    val += hash(tr.stateTransition)
-                    val *= 31
-                    val &= 0xFFFFFFFF
-                self._hash = val
-            return self._hash
-
-        def __eq__(self, other):
-            if len(other.transitions) != len(self.transitions):
-                return False
-            return all(id(self.transitions[i].stateTransition) == id(other.transitions[i].stateTransition) \
-                    for i in range(len(self.transitions)))
-
-        @property
-        def score(self):
-            if self._score is not None:
-                return self._score
-            score = 0
-            if id(self.transitions[0].source.currentState) in targetStateIds:
-                score += 2
-            if id(self.transitions[-1].target.currentState) in targetStateIds:
-                score += 1
-            self._score = score
-            return score
-
-        def __lt__(self, other):
-            selfScore = self.score
-            otherScore = other.score
-            if selfScore == otherScore:
-                if len(self.transitions) == len(other.transitions):
-                    for setr, ottr in zip(self.transitions, other.transitions):
-                        if id(setr.stateTransition) != id(ottr.stateTransition):
-                            seFirstVisitTimestamp = setr.stateTransition.firstVisitTimestamp
-                            otFirstVisitTimestamp = ottr.stateTransition.firstVisitTimestamp
-                            assert seFirstVisitTimestamp != otFirstVisitTimestamp
-                            return seFirstVisitTimestamp < otFirstVisitTimestamp
-                    return False
-                return len(self.transitions) < len(other.transitions)
-            return selfScore < otherScore
-
-        def getStateSequence(self):
-            # just state sequence, but consecutive same states are compressed to single state
-            if self._ssq is not None:
-                return self._ssq
-
-            ret = [self.transitions[0].source.currentState]
-            for tr in self.transitions:
-                state = tr.target.currentState
-                if id(state) != id(ret[-1]):
-                    ret.append(state)
-
-            self._ssq = ret
-            return ret
-
-        def __repr__(self):
-            # print states
-            return '<SubSequence len={}, states={}>'.format(len(self.transitions),
-                ','.join(map(lambda s:str(s.firstVisitTimestamp), self.getStateSequence())))
-
-    subsequences_list = getSubsequences(model, graph)
-    if subsequences_list is None:
-        sys.exit(1)
-    subseqCounter = dict()
-    for seq in subsequences_list:
-        cursubseq = SubSequence(seq[0])
-        for tr in seq[1:]:
-            if id(tr.source.currentState) in targetStateIds:
-                try:
-                    subseqCounter[cursubseq] += 1
-                except KeyError:
-                    subseqCounter[cursubseq] = 1
-                cursubseq = SubSequence(tr)
-            else:
-                cursubseq.append(tr)
-        try:
-            subseqCounter[cursubseq] += 1
-        except KeyError:
-            subseqCounter[cursubseq] = 1
-    print("Num subsequences", len(subseqCounter))
-    print("Subsequences called >= 3 times :", len([0 for seq in subseqCounter if subseqCounter[seq] >= 3]))
-    for seq in sorted(subseqCounter.keys(), key=lambda k:subseqCounter[k]):
-        if subseqCounter[seq] >= 3:
-            print(subseqCounter[seq], seq)
-
-    return subseqCounter
 
 # sanity 
 def sanity_gt_st(model, graph):
@@ -456,11 +517,13 @@ def checkobj(fname):
     graph = model.graph
     check0(model, graph)
     check1(model, graph)
-    check3(model, graph)
+    subsequences = check2(model, graph)
+    check3(model, graph, subsequences)
+    return subsequences
 
 if __name__ == "__main__":
     if len(sys.argv) >= 2:
-        checkobj(sys.argv[1])
+        subsequences = checkobj(sys.argv[1])
 
         # transitions = graph.treeTransitionHistory
         # trees = [GUITree.init(t.source) for t in transitions]
