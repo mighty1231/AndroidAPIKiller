@@ -14,8 +14,7 @@ _temp = '''
 [APE]      0  SATURATED_STATE
 [APE]      2  USE_BUFFER
 [APE]    231  EARLY_STAGE
-[APE]      2  TARGET_METHOD
-[APE]     28  TARGET_METHOD_NEAR
+[APE]      2  MCMC
 [APE]      4  EPSILON_GREEDY
 [APE]      0  RANDOM
 [APE]      0  NULL
