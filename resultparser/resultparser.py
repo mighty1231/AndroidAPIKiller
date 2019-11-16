@@ -57,14 +57,23 @@ def analyzeCommon(directory):
     assert not os.path.isfile(outf)
 
     sys.path.append('../crashgen')
-    from consumer import parse_data
+    from consumer import parse_data, Threads
     from parse_aperes import Result
     experiments = cleanupExperiments(directory)
 
     class Counter(object):
         def __init__(self):
             self.cnt = 0
+            self.main_tid = -1
+            self.main_cnt = 0
+        def setThreads(self, threads):
+            self.main_tid = threads.get_main_tid()
         def inc(self, value):
+            self.main_cnt += 1
+        def tidInc(self, tid, value):
+            assert self.main_tid != -1
+            if tid == self.main_tid:
+                self.main_cnt += 1
             self.cnt += 1
 
     results = []
@@ -74,10 +83,14 @@ def analyzeCommon(directory):
         binaries = glob.glob(os.path.join(directory, 'mt_data/*/data_*.bin'))
         counter = Counter()
         for binary in sorted(binaries, key=lambda b:int(b.split('/')[-2])):
-            parse_data(binary, {10: counter.inc, 11: counter.inc, 12: counter.inc}, verbose=False)
+            thread_name = os.path.join(os.path.split(binary)[0], 'info_m.log')
+            counter.setThreads(Threads(thread_name))
+            parse_data(binary, {10: counter.inc, 11: counter.inc, 12: counter.inc,
+                13: counter.tidInc, 14: counter.tidInc, 15: counter.tidInc}, verbose=False)
         result['type'] = exptype
         result['idx'] = expidx
-        result['# Invocation'] = counter.cnt
+        result['# Invocation w/ main thread'] = counter.main_cnt
+        result['# Invocation total'] = counter.cnt
         results.append(result)
 
     with open(outf, 'w') as csvf:

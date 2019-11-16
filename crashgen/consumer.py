@@ -35,18 +35,50 @@ def b2u8(buf, idx = 0):
         + (buf[idx + 6] << 48) \
         + (buf[idx + 7] << 56)
 
-def parse_threadinfo(threadinfo_fname):
-    threads = dict()
-    with open(threadinfo_fname, 'rt') as f:
-        for line in f:
-            if line[-1] != '\n':
-                break
-            tid, name = line.rstrip().split('\t')
-            tid = int(tid)
-            assert tid not in threads, (prefix, tid, thread[tid], name)
-            threads[tid] = name
+class Threads:
+    def __init__(self, threadinfo_fname):
+        threads = dict()
+        main_tid = -1
+        with open(threadinfo_fname, 'rt') as f:
+            for line in f:
+                if line[-1] != '\n':
+                    break
+                tid, name = line.rstrip().split('\t')
+                tid = int(tid)
+                assert tid not in threads, (prefix, tid, thread[tid], name)
+                if main_tid == -1:
+                    assert name == 'main', name
+                    main_tid = tid
+                threads[tid] = name
+        self.threads = threads
+        self.main_tid = main_tid
 
-    return threads
+    def items(self, *args):
+        return self.threads.items()
+
+    def values(self, *args):
+        return self.threads.values()
+
+    def __getitem__(self, *args):
+        return self.threads.__getitem__(*args)
+
+    def __setitem__(self, *args):
+        self.threads.__setitem__(*args)
+
+    def __contains__(self, *args):
+        return self.threads.__contains__(*args)
+
+    def __iter__(self, *args):
+        return self.threads.__iter__(*args)
+
+    def __len__(self, *args):
+        return self.threads.__len__(*args)
+
+    def get_main_tid(self):
+        return self.main_tid
+
+def parse_threadinfo(threadinfo_fname):
+    return Threads(threadinfo_fname)
 
 class Methods:
     def __init__(self, methodinfo_fname):
@@ -130,9 +162,11 @@ def parse_data(data_fname, callbacks=[], verbose=True):
     Callback for ping events 8
         - argument [datetime_object]
     Callback for thread kill 9
-        - agrument [@TODO]
+        - argument [@TODO]
     Callback for target entring/exiting/unwinding 10/11/12
         - argument [method_id]
+    Callback for target entring/exiting/unwinding 13/14/15 with MiniTrace version 4
+        - argument [tid, method_id]
     '''
     if isinstance(callbacks, dict):
         callbacks = [callbacks.get(i, None) for i in range(13)]
@@ -202,12 +236,24 @@ def parse_data(data_fname, callbacks=[], verbose=True):
                         callbacks[9](tid)
                     continue
                 elif tid in [3, 4, 5]:
-                    value = f.read(4)
-                    if len(value) < 4:
-                        break
-                    if callbacks[10-3+tid]:
-                        value = b2u4(value)
-                        callbacks[10-3+tid](value)
+                    if version >= 4:
+                        real_tid = f.read(4)
+                        if len(real_tid) < 4:
+                            break
+                        value = f.read(4)
+                        if len(value) < 4:
+                            break
+                        if callbacks[13-3+tid]:
+                            real_tid = b2u4(real_tid)
+                            value = b2u4(value)
+                            callbacks[13-3+tid](real_tid, value)
+                    else:
+                        value = f.read(4)
+                        if len(value) < 4:
+                            break
+                        if callbacks[10-3+tid]:
+                            value = b2u4(value)
+                            callbacks[10-3+tid](value)
                     continue
 
                 value = f.read(4)
@@ -456,6 +502,9 @@ def print_data(prefix, idx = 0):
         lambda func_id: print('TargetMethod #%d be entered' % func_id),
         lambda func_id: print('TargetMethod #%d be exited' % func_id),
         lambda func_id: print('TargetMethod #%d be unwinded' % func_id),
+        lambda tid, func_id: print('TargetMethod #%d be entered on %s' % (func_id, get_thread_name(tid))),
+        lambda tid, func_id: print('TargetMethod #%d be exited on %s' % (func_id, get_thread_name(tid))),
+        lambda tid, func_id: print('TargetMethod #%d be unwinded on %s' % (func_id, get_thread_name(tid))),
     ])
 
 def print_target_data(prefix, idx = 0):
@@ -477,6 +526,9 @@ def print_target_data(prefix, idx = 0):
         10: lambda func_id: print('TargetMethod #%d be entered' % func_id),
         11: lambda func_id: print('TargetMethod #%d be exited' % func_id),
         12: lambda func_id: print('TargetMethod #%d be unwinded' % func_id),
+        13: lambda tid, func_id: print('TargetMethod #%d be entered on %s' % (func_id, get_thread_name(tid))),
+        14: lambda tid, func_id: print('TargetMethod #%d be exited on %s' % (func_id, get_thread_name(tid))),
+        15: lambda tid, func_id: print('TargetMethod #%d be unwinded on %s' % (func_id, get_thread_name(tid))),
     })
 
 
