@@ -49,7 +49,7 @@ def mt_task(package_name, serial, logging_flag, mt_is_running):
     kill_mtserver(serial)
 
 
-def ape_task(avd_name, serial, package_name, output_dir, running_minutes, mt_is_running, mtdtarget_fname, no_guide):
+def ape_task(avd_name, serial, package_name, output_dir, running_minutes, mt_is_running, mtdtarget_fname, target_all_thread, no_guide):
     sleep_cnt = 0
     while mt_is_running.value == 0 and sleep_cnt < 30:
         time.sleep(1)
@@ -71,8 +71,9 @@ def ape_task(avd_name, serial, package_name, output_dir, running_minutes, mt_is_
             run_adb_cmd("shell rm -rf {}".format(directory), serial=serial)
 
     print('ape_task(): Emulator[{}, {}] Running APE with package {}'.format(avd_name, serial, package_name))
-    args = '-p {} --running-minutes {} --mt --mtdtarget {} {}--ape sata'.format(package_name, running_minutes, mtdtarget_fname,
-        "--no-mtdguide " if no_guide else "")
+    args = '-p {} --running-minutes {} --mt --mtdtarget {} {}{}--ape sata'.format(package_name, running_minutes, mtdtarget_fname,
+        "--no-mtdguide " if no_guide else "",
+        "--target-all-thread" if target_all_thread else "")
     with open(os.path.join(output_dir, 'ape_stdout_stderr.txt'), 'wt') as f:
         ret = run_adb_cmd('shell CLASSPATH={} {} {} {} {}'.format(
                 os.path.join(TMP_LOCATION, 'ape.jar'),
@@ -92,7 +93,7 @@ def ape_task(avd_name, serial, package_name, output_dir, running_minutes, mt_is_
     ret = run_adb_cmd('pull /data/ape {}'.format(output_dir), serial=serial)
 
 def run_ape_with_mt(apk_path, avd_name, libart_path, ape_path, mtserver_path,
-        output_dir, running_minutes, force_clear, methods, no_guide=False):
+        output_dir, running_minutes, force_clear, methods, target_all_thread, no_guide=False):
     package_name = get_package_name(apk_path)
     print('run_ape_with_mt(): given apk_path {} avd_name {}'.format(apk_path, avd_name))
 
@@ -121,7 +122,7 @@ def run_ape_with_mt(apk_path, avd_name, libart_path, ape_path, mtserver_path,
         args=(package_name, avd.serial, "20010100", mt_is_running))
     apetask_thread = threading.Thread(target=ape_task,
         args=(avd_name, avd.serial, package_name, output_dir, running_minutes,
-              mt_is_running, mtdtarget_emulpath, no_guide))
+              mt_is_running, mtdtarget_emulpath, target_all_thread, no_guide))
 
     set_multiprocessing_mode()
     generate_catcher_thread(os.path.join(output_dir, "logcat.txt"),
@@ -209,7 +210,7 @@ def run_ape_with_mt(apk_path, avd_name, libart_path, ape_path, mtserver_path,
 
     return "notsearched"
 
-def run(apk_path, avd_name, total_count, methods, libart_path, ape_path, mtserver_path, running_minutes, output_dir, force_clear):
+def run(apk_path, avd_name, total_count, methods, libart_path, ape_path, mtserver_path, running_minutes, target_all_thread, output_dir, force_clear):
     expidx = 0
     notsearched_count = 0
     unregistered_count = 0
@@ -219,7 +220,7 @@ def run(apk_path, avd_name, total_count, methods, libart_path, ape_path, mtserve
             print("Creating folder ", outf)
             os.makedirs(outf)
         status = run_ape_with_mt(apk_path, avd_name, libart_path, ape_path, mtserver_path,
-                outf, running_minutes, force_clear, methods, no_guide=False)
+                outf, running_minutes, force_clear, methods, target_all_thread, no_guide=False)
         if status == "install":
             return
         elif status == "rerun":
@@ -249,7 +250,7 @@ def run(apk_path, avd_name, total_count, methods, libart_path, ape_path, mtserve
             print("Creating folder ", outf)
             os.makedirs(outf)
         status = run_ape_with_mt(apk_path, avd_name, libart_path, ape_path, mtserver_path,
-                outf, running_minutes, force_clear, methods, no_guide=True)
+                outf, running_minutes, force_clear, methods, target_all_thread, no_guide=True)
         if status == "rerun":
             print("exp status {} on {}".format(status, outf), flush=True)
             continue
@@ -309,6 +310,7 @@ if __name__ == "__main__":
     parser.add_argument('--repeat_count', default='10')
     parser.add_argument('--running_minutes', default='20')
     parser.add_argument('--output_dir', default='../results/continuous')
+    parser.add_argument('--target_all_thread', default=False, action='store_true')
     args = parser.parse_args()
 
     repeat_count = int(args.repeat_count)
@@ -341,6 +343,9 @@ if __name__ == "__main__":
             print('\t'.join([clsname, mtdname, signature]))
         output_dir = make_output_dir(args.output_dir)
         print('Output directory', output_dir, flush=True)
-        run(expunit.apk_path, args.avd_name, repeat_count, expunit.methods, args.libart_path, args.ape_path, args.mtserver_path, args.running_minutes, output_dir, force_clear)
+        run(expunit.apk_path, args.avd_name, repeat_count, expunit.methods,
+                args.libart_path, args.ape_path, args.mtserver_path,
+                args.running_minutes, args.target_all_thread,
+                output_dir, force_clear)
         done_experiments.append(expunit)
         force_clear = False
