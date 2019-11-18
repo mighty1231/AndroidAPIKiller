@@ -168,10 +168,11 @@ def parse_data(data_fname, callbacks=[], verbose=True):
     Callback for target entring/exiting/unwinding 13/14/15 with MiniTrace version 4
         - argument [tid, method_id]
     '''
+    NUM_CALLBACKS = 16
     if isinstance(callbacks, dict):
-        callbacks = [callbacks.get(i, None) for i in range(13)]
+        callbacks = [callbacks.get(i, None) for i in range(NUM_CALLBACKS)]
     elif isinstance(callbacks, list):
-        for _ in range(13-len(callbacks)):
+        for _ in range(NUM_CALLBACKS-len(callbacks)):
             callbacks.append(None)
     else:
         raise RuntimeError
