@@ -332,7 +332,7 @@ if __name__ == "__main__":
                 expname, apk_path = next(iter(it)).rstrip().split('\t')
                 for i in range(mtdcnt):
                     lines.append(next(iter(it)).rstrip())
-                tmp = ExperimentUnit.fromlines(lines)
+                tmp = ExperimentUnit.fromlines(expname, apk_path, lines)
                 if tmp in done_experiments:
                     continue
                 if names is not None and tmp.name not in names:
