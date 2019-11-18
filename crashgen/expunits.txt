@@ -1,12 +1,107 @@
 1
-../data/apk_with_reports/0415/ImapNote2-release.apk
-com/Pau/ImapNotes2/Sync/SyncUtils	GetOneNote	(Ljava/io/File;Ljavax/mail/Message;Lcom/Pau/ImapNotes2/Data/NotesDb;Ljava/lang/String;Ljava/lang/String;Z)V
+0061	../data/apk_with_reports/0061/GnucashAndroid_v2.0.0.apk
+org/gnucash/android/ui/account/AccountsActivity$2	onClick	(Landroid/view/View;)V
 
 1
-../data/apk_with_reports/0223/aps_1_2_0_26.apk
+0465	../data/apk_with_reports/0465/Dictionary-release.apk
+com/hughes/android/dictionary/ba	onClick	(Landroid/view/View;)V
+
+1
+0612	../data/apk_with_reports/0612/transdroid-2.2.0-rc1.apk
+org/transdroid/core/gui/DetailsFragment$1	onActionItemClicked	(Landroid/view/ActionMode;Landroid/view/MenuItem;)Z
+
+1
+0579	../data/apk_with_reports/0579/Point-2.3.apk
+com/afollestad/materialdialogs/MaterialDialog	onClick	(Landroid/view/View;)V
+
+1
+0196	../data/apk_with_reports/0196/app-release.apk
+org/greenrobot/greendao/InternalQueryDaoAccess	loadAllAndCloseCursor	(Landroid/database/Cursor;)Ljava/util/List;
+
+1
+0254	../data/apk_with_reports/0254/Omni.Notes-5.3.1-play-release.apk
+it/feio/android/omninotes/OmniNotes	getAnalyticsHelper	()Lit/feio/android/analitica/AnalyticsHelper;
+
+1
+0551	../data/apk_with_reports/0551/Fahrplan-ccc31c3-release-1.30.4.apk
+nerd/tuxmobil/fahrplan/congress/FahrplanMisc	addAlarm	(Landroid/content/Context;Lnerd/tuxmobil/fahrplan/congress/Lecture;I)V
+
+1
+0313	../data/apk_with_reports/0313/app-release.apk
+com/mapzen/tangram/MapController	init	()V
+
+1
+0492	../data/apk_with_reports/0492/aard2-android-0.15.apk
+itkach/aard2/ArticleCollectionActivity	createFromUri	(Litkach/aard2/Application;Landroid/net/Uri;)Litkach/aard2/ArticleCollectionActivity$ArticleCollectionPagerAdapter;
+
+1
+0480	../data/apk_with_reports/0480/wikipoff_v0.3.0.apk
+fr/renzo/wikipoff/StorageUtils	getDefaultStorage	(Landroid/content/Context;)Ljava/lang/String;
+
+1
+0555	../data/apk_with_reports/0555/mobile-gplay-release.apk
+net/etuldan/sparss/fragment/EntriesListFragment$3	onLoadFinished	(Landroid/content/Loader;Ljava/lang/Object;)V
+
+1
+0482	../data/apk_with_reports/0482/SkyTube-Extra-2.2.apk
+free/rm/skytube/gui/fragments/ChannelBrowserFragment	onCreateView	(Landroid/view/LayoutInflater;Landroid/view/ViewGroup;Landroid/os/Bundle;)Landroid/view/View;
+
+1
+0262	../data/apk_with_reports/0262/k9-5.207.apk
+com/fsck/k9/mail/store/webdav/WebDavStore	sendRequest	(Ljava/lang/String;Ljava/lang/String;Lorg/apache/http/entity/StringEntity;Ljava/util/Map;Z)Ljava/io/InputStream;
+
+1
+0315	../data/apk_with_reports/0315/OpenRedmine-v3.18_51.apk
+jp/redmine/redmineclient/fragment/ProjectList	setupSearchBar	(Landroid/view/Menu;)V
+
+1
+0489	../data/apk_with_reports/0489/materialistic-60.apk
+io/github/hidroh/materialistic/ItemActivity	onPrepareOptionsMenu	(Landroid/view/Menu;)Z
+
+1
+0223	../data/apk_with_reports/0223/aps_1_2_0_26.apk
 com/zeapo/pwdstore/PasswordStore	deletePassword	(Lcom/zeapo/pwdstore/utils/PasswordRecyclerAdapter;I)V
 
 1
-../data/apk_with_reports/0361/app-release.apk
+0361	../data/apk_with_reports/0361/app-release.apk
 com/nbossard/packlist/process/saving/PrefsSavingModule	updateItem	(Lcom/nbossard/packlist/model/Item;)V
 
+1
+0206	../data/apk_with_reports/0206/Domodroid-release.apk
+j/g$a	onPostExecute	(Ljava/lang/Object;)V
+
+1
+0207	../data/apk_with_reports/0207/Kontalk-3.1.9.1-googleplay.apk
+org/kontalk/ui/ComposeMessageFragment	updateUI	()V
+
+1
+0416	../data/apk_with_reports/0416/app-release.apk
+com/pcinpact/adapters/ItemsAdapter	getView	(ILandroid/view/View;Landroid/view/ViewGroup;)Landroid/view/View;
+
+1
+0611	../data/apk_with_reports/0611/app-regular-release.apk
+org/traccar/client/TrackingService	onCreate	()V
+
+1
+0561	../data/apk_with_reports/0561/openarchive-0.0.16-release.apk
+net/opendasharchive/openarchive/MainActivity	onActivityResult	(IILandroid/content/Intent;)V
+
+1
+0197	../data/apk_with_reports/0197/materialistic-69.apk
+io/github/hidroh/materialistic/data/FavoriteManager	add	(Landroid/content/Context;Lio/github/hidroh/materialistic/data/WebItem;)V
+
+1
+0459	../data/apk_with_reports/0459/Transportr-1.1.3.apk
+de/grobox/liberario/ui/LocationView	stopLoader	()V
+
+1
+0218	../data/apk_with_reports/0218/ngmobile-2.4.apk
+com/nextgis/mobile/fragment/MapFragment	onOptionsItemSelected	(I)Z
+
+1
+0573	../data/apk_with_reports/0573/glucosio-stable-0.8.0.apk
+org/glucosio/android/fragment/OverviewFragment$1	onItemSelected	(Landroid/widget/AdapterView;Landroid/view/View;IJ)V
+
+1
+0264	../data/apk_with_reports/0264/SGit-release.apk
+me/sheimi/sgit/database/models/Repo	getLatestCommit	()Lorg/eclipse/jgit/revwalk/RevCommit;

@@ -259,37 +259,34 @@ def run(apk_path, avd_name, total_count, methods, libart_path, ape_path, mtserve
         print("exp status {} on {}".format(status, outf), flush=True)
 
 class ExperimentUnit:
-    def __init__(self, apk_path, methods):
+    def __init__(self, name, apk_path, methods):
         assert os.path.isfile(apk_path), apk_path
         assert isinstance(methods, list), methods
         for method in methods:
             clsname, mtdname, signature = method
+        self.name = name
         self.apk_path = apk_path
         self.methods = methods
 
     def __eq__(self, other):
+        if self.name != other.name:
+            return False
         if self.apk_path != other.apk_path:
             return False
         return self.methods == other.methods
 
     @staticmethod
-    def fromlines(lines):
-        apk_path = lines[0]
+    def fromlines(name, apk_path, lines):
         methods = []
-        for line in lines[1:]:
+        for line in lines:
             clsname, mtdname, signature = line.split("\t")
             methods.append((clsname, mtdname, signature))
-        return ExperimentUnit(apk_path, methods)
+        return ExperimentUnit(name, apk_path, methods)
 
 def make_output_dir(output_dir):
-    if not os.path.isdir(output_dir):
-        if os.path.isfile(output_dir):
-            raise RuntimeError("Output directory {} is file".format(output_dir))
-        os.makedirs(output_dir)
-
     idx = 0
     while idx < 500:
-        new_output_dir = os.path.join(output_dir, 'exp_{}'.format(idx))
+        new_output_dir = output_dir + "_{}".format(idx)
         if os.path.isdir(new_output_dir):
            idx += 1
            continue
@@ -311,12 +308,17 @@ if __name__ == "__main__":
     parser.add_argument('--running_minutes', default='20')
     parser.add_argument('--output_dir', default='../results/continuous')
     parser.add_argument('--target_all_thread', default=False, action='store_true')
+    parser.add_argument('--names', default=None) # do experiment with given expnames
     args = parser.parse_args()
 
     repeat_count = int(args.repeat_count)
     assert repeat_count > 0, repeat_count
     done_experiments = []
     force_clear = args.force_clear
+    names = None
+    if args.names:
+        names = args.names.split(',')
+        print('Do experiments with name {}'.format(', '.join(names)))
     while True:
         expunit = None
         with open(args.exp_file, 'rt') as f:
@@ -327,22 +329,31 @@ if __name__ == "__main__":
                     continue
                 mtdcnt = int(line)
                 lines = []
-                for i in range(mtdcnt+1):
+                expname, apk_path = next(iter(it)).rstrip().split('\t')
+                for i in range(mtdcnt):
                     lines.append(next(iter(it)).rstrip())
                 tmp = ExperimentUnit.fromlines(lines)
                 if tmp in done_experiments:
+                    continue
+                if names is not None and tmp.name not in names:
                     continue
                 expunit = tmp
                 break
         if expunit is None:
             break
 
-        print("[Experiment]")
+        print("[Experiment - {}]".format(expunit.name))
         print(expunit.apk_path)
         for clsname, mtdname, signature in expunit.methods:
             print('\t'.join([clsname, mtdname, signature]))
-        output_dir = make_output_dir(args.output_dir)
-        print('Output directory', output_dir, flush=True)
+        output_dir = os.path.join(args.output_dir, expunit.name)
+        if os.path.isdir(output_dir):
+            print(" - Warning: there is folder {} already".format(output_dir))
+            output_dir = make_output_dir(output_dir)
+            print(' - New output directory', output_dir, flush=True)
+        else:
+            os.makedirs(output_dir)
+            print(' - Output directory', output_dir, flush=True)
         run(expunit.apk_path, args.avd_name, repeat_count, expunit.methods,
                 args.libart_path, args.ape_path, args.mtserver_path,
                 args.running_minutes, args.target_all_thread,
