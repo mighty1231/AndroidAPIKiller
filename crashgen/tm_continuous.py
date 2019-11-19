@@ -279,7 +279,7 @@ class ExperimentUnit:
     def fromlines(name, apk_path, lines):
         methods = []
         for line in lines:
-            clsname, mtdname, signature = line.split("\t")
+            clsname, mtdname, signature = line.split()
             methods.append((clsname, mtdname, signature))
         return ExperimentUnit(name, apk_path, methods)
 
