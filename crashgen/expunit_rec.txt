@@ -1,0 +1,86 @@
+1
+rec1    ../../ReCDroid/EvaluationResult/apks/1.newsblur-v6.10_debug.apk
+com/newsblur/network/APIManager login   (Ljava/lang/String;Ljava/lang/String;)Lcom/newsblur/network/domain/LoginResponse;
+
+1
+rec2    ../../ReCDroid/EvaluationResult/apks/2.markor-v0.3.2_debug.apk
+net/gsantner/opoc/ui/FilesystemDialog   onViewCreated   (Landroid/view/View;Landroid/os/Bundle;)V
+
+1
+rec5    ../../ReCDroid/EvaluationResult/apks/5.OpenSudoku.apk
+cz/romario/opensudoku/gui/SudokuListActivity    onPrepareDialog (ILandroid/app/Dialog;)V
+
+1
+rec10   ../../ReCDroid/EvaluationResult/apks/10.olam_debug.apk
+com/olam/DatabaseHelper getSimilarStems (Ljava/lang/String;)Ljava/util/Map;
+
+1
+rec11   ../../ReCDroid/EvaluationResult/apks/11.olam_debug.apk
+com/olam/Stemmer        completeStem    (Ljava/lang/String;)Ljava/lang/String;
+
+1
+rec13   ../../ReCDroid/EvaluationResult/apks/13.LibreNews-v1.4_debug.apk
+app/librenews/io/librenews/controllers/FlashManager     refresh ()V
+
+1
+rec14	../../ReCDroid/EvaluationResult/apks/14.LibreNews-v1.4_debug.apk
+app/librenews/io/librenews/views/SettingsActivityFragment	onSharedPreferenceChanged	(Landroid/content/SharedPreferences;Ljava/lang/String;)V
+
+1
+rec19 ../../ReCDroid/EvaluationResult/apks/19.Pix-Art_share_debug.apk
+de/pixart/messenger/ui/EditAccountActivity	shareBarcode	()V
+
+1
+rec20	../../ReCDroid/EvaluationResult/apks/20.Pix-Art_debug.apk
+de/pixart/messenger/ui/EditAccountActivity	onOptionsItemSelected	(Landroid/view/MenuItem;)Z
+
+1
+rec24	 ../../ReCDroid/EvaluationResult/apks/24.obd-reader_debug.apk
+pt/lighthouselabs/obd/reader/activity/MainActivity	stopLiveData	()V
+
+1
+rec25	../../ReCDroid/EvaluationResult/apks/25.dagger_debug.apk
+com/vestrel00/daggerbutterknifemvp/ui/main/MainFragment	onExample1Clicked	()V
+
+
+3
+rec31	../../ReCDroid/EvaluationResult/apks/31.68-TagMo.apk
+com/hiddenramblings/tagmo/NfcActivity_	setContentView	(I)V
+com/hiddenramblings/tagmo/NfcActivity_	setContentView	(Landroid/view/View;)V
+com/hiddenramblings/tagmo/NfcActivity_	setContentView	(Landroid/view/View;Landroid/view/ViewGroup$LayoutParams;)V
+
+
+1
+rec32	../../ReCDroid/EvaluationResult/apks/32.mifosng-android-release.apk
+com/mifos/mifosxdroid/online/clientdetails/ClientDetailsFragment	captureClientImage	()V
+
+2
+rec34	../../ReCDroid/EvaluationResult/apks/34.FastAdapter-v1.4.1.1.apk
+com/mikepenz/fastadapter/adapters/ItemAdapter	remove	(I)Lcom/mikepenz/fastadapter/IItemAdapter;
+com/mikepenz/fastadapter/adapters/ItemAdapter	remove	(I)Lcom/mikepenz/fastadapter/adapters/ItemAdapter;
+
+1
+rec38	../../ReCDroid/EvaluationResult/apks/38.AIMSICD_debug.apk
+com/secupwn/aimsicd/fragments/DeviceFragment$1	onServiceConnected	(Landroid/content/ComponentName;Landroid/os/IBinder;)V
+
+1
+rec39	../../ReCDroid/EvaluationResult/apks/39.materialistic-76.apk
+io/github/hidroh/materialistic/widget/PeekabooTouchHelperCallback	onChildDraw	(Landroid/graphics/Canvas;Landroid/support/v7/widget/RecyclerView;Landroid/support/v7/widget/RecyclerView$ViewHolder;FFIZ)V
+
+
+1
+rec42	../../ReCDroid/EvaluationResult/apks/42.QKSMS-v2.7.1.apk
+android/support/v4/app/BackStackRecord	popFromBackStack	(ZLandroid/support/v4/app/BackStackRecord$TransitionState;Landroid/util/SparseArray;Landroid/util/SparseArray;)Landroid/support/v4/app/BackStackRecord$TransitionState;
+
+1
+rec45	../../ReCDroid/EvaluationResult/apks/45.Asciicam-v1.2.3.apk
+com/dozingcatsoftware/asciicam/LibraryActivity	onActivityResult	(IILandroid/content/Intent;)V
+
+1
+rec47	../../ReCDroid/EvaluationResult/apks/47.openhab-v2.0.10beta.apk
+org/openhab/habdroid/ui/OpenHABWidgetListFragment$3	onClick	(Landroid/view/View;)V
+
+1
+rec49	./../ReCDroid/EvaluationResult/apks/49.microMathematics-v2.15.4.apk
+com/mkulesh/micromath/widgets/HorizontalNumberPicker	onClick	(Landroid/view/View;)V
+

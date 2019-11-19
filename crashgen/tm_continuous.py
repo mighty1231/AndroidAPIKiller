@@ -119,7 +119,7 @@ def run_ape_with_mt(apk_path, avd_name, libart_path, ape_path, mtserver_path,
     kill_mtserver(serial = avd.serial)
     mt_is_running = Value('i', 0)
     mtserver_thread = threading.Thread(target=mt_task,
-        args=(package_name, avd.serial, "20010100", mt_is_running))
+        args=(package_name, avd.serial, "00010180", mt_is_running))
     apetask_thread = threading.Thread(target=ape_task,
         args=(avd_name, avd.serial, package_name, output_dir, running_minutes,
               mt_is_running, mtdtarget_emulpath, target_all_thread, no_guide))
