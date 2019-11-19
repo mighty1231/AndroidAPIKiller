@@ -329,7 +329,7 @@ if __name__ == "__main__":
                     continue
                 mtdcnt = int(line)
                 lines = []
-                expname, apk_path = next(iter(it)).rstrip().split('\t')
+                expname, apk_path = next(iter(it)).rstrip().split()
                 for i in range(mtdcnt):
                     lines.append(next(iter(it)).rstrip())
                 tmp = ExperimentUnit.fromlines(expname, apk_path, lines)
