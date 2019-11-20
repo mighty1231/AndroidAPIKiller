@@ -83,7 +83,7 @@ def analyzeCommon(directory):
         binaries = glob.glob(os.path.join(directory, 'mt_data/*/data_*.bin'))
         counter = Counter()
         for binary in sorted(binaries, key=lambda b:int(b.split('/')[-2])):
-            thread_name = os.path.join(os.path.split(binary)[0], 'info_m.log')
+            thread_name = os.path.join(os.path.split(binary)[0], 'info_t.log')
             counter.setThreads(Threads(thread_name))
             parse_data(binary, {10: counter.inc, 11: counter.inc, 12: counter.inc,
                 13: counter.tidInc, 14: counter.tidInc, 15: counter.tidInc}, verbose=False)

@@ -65,7 +65,7 @@ def makeUnit(expname, exptype, directory):
     if len(modelobjects) < 1:
         print("There is no model object in {}".format(directory))
         with open(apelog_fname, 'rt') as f:
-            num_lines = int(run_cmd('wc -l {}'.format(apelog_fname)))
+            num_lines = int(run_cmd('wc -l {}'.format(apelog_fname)).split()[0])
 
             for i, line in enumerate(f):
                 if i >= num_lines - 10:
@@ -102,7 +102,7 @@ def makeUnit(expname, exptype, directory):
     if time_elapsed == -1:
         print("Time elapsed not found")
         with open(apelog_fname, 'rt') as f:
-            num_lines = int(run_cmd('wc -l {}'.format(apelog_fname)))
+            num_lines = int(run_cmd('wc -l {}'.format(apelog_fname)).split()[0])
 
             for i, line in enumerate(f):
                 if i >= num_lines - 10:
@@ -238,9 +238,18 @@ if __name__ == "__main__":
             exp = exp[:-1]
         expname, exptype = exp.split('/')[-2:]
         print('Experiment {}/{}'.format(expname, exptype))
-        results.append(makeUnit(expname, exptype, exp))
+        result = makeUnit(expname, exptype, exp)
+        if result is not None:
+            results.append(result)
         print()
 
-    print('----------------------')
-    for result in results:
-        print(result)
+    print('----------- csv ---------')
+    with open('result.csv', 'wt') as f:
+        string = 'expname,exptype,time_elapsed,#warnings,#wait,#crashes,#targetmethod reg:cov,#invoc in main,#invoc in all'
+        f.write(string)
+        f.write('\n')
+        print(string)
+        for result in results:
+            f.write(result)
+            f.write('\n')
+            print(result)
