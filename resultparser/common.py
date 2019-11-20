@@ -27,6 +27,8 @@ def classReadJavaList(l, cls):
     if isinstance(l, javaobj.JavaObject):
         l = readJavaList(l)
     if isinstance(l, list):
+        if l == []:
+            return l
         if isinstance(l[0], cls):
             return l
         else:

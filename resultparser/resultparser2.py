@@ -91,11 +91,19 @@ def makeUnit(expname, exptype, directory, detail=False):
     waitCounter = Counter()
     crashLongMessagesCounter = Counter()
     time_elapsed = -1
+    strategy_cnt = [0 for strategy in strategies]
     with open(apelog_fname, 'rt') as f:
-        for line in f:
+        it = iter(f)
+        for line in it:
             line = line.rstrip()
             if line.startswith('[APE_MT_WARNING]'):
                 warningCounter.append(line)
+
+            gp = re.match(r'\[APE\] Sata Strategy: buffer size \(([0-9]+)\)', line)
+            if gp:
+                nums = [re.match(r'\[APE\] *([0-9]+)  ' + strategy, next(it).rstrip()) for strategy in strategies]
+                strategy_cnt = list(map(lambda gp:int(gp.group(1)), nums))
+                continue
 
             elif line.startswith('## Network stats: elapsed time='):
                 gp = re.match(r'## Network stats: elapsed time=([0-9]+)ms \(([0-9]+)ms mobile, ([0-9]+)ms wifi, ([0-9]+)ms not connected\)', line)
@@ -236,6 +244,7 @@ def makeUnit(expname, exptype, directory, detail=False):
             data = execution_data[method].ratio()
         method_data.append('%s:%.3f' % (method_register_status[method], data))
     string += '/'.join(method_data)
+    string += ',{},{}'.format(strategy_cnt[strategies.index('MCMC')], sum(strategy_cnt))
     string += ',{},{}'.format(mtdCounter.main_cnt, mtdCounter.cnt)
 
     if not detail:
@@ -300,24 +309,30 @@ def makeUnit(expname, exptype, directory, detail=False):
     state_scores = []
     for state in targetStates:
         state_scores.append(graph.metTargetScore(state))
-    state_scores = np.array(state_scores)
-    string += ',%d,%.3f,%.3f,%.3f,%.3f' % (
-        len(state_scores),
-        np.min(state_scores),
-        np.max(state_scores),
-        np.average(state_scores),
-        np.std(state_scores))
+    if state_scores != []:
+        state_scores = np.array(state_scores)
+        string += ',%d,%.3f,%.3f,%.3f,%.3f' % (
+            len(state_scores),
+            np.min(state_scores),
+            np.max(state_scores),
+            np.average(state_scores),
+            np.std(state_scores))
+    else:
+        string += ',0,NaN,NaN,NaN,NaN'
 
     transition_scores = []
     for transition in marked_transitions:
         transition_scores.append(StateTransition.init(transition).metTargetRatio())
-    transition_scores = np.array(transition_scores)
-    string += ',%d,%.3f,%.3f,%.3f,%.3f' % (
-        len(transition_scores),
-        np.min(transition_scores),
-        np.max(transition_scores),
-        np.average(transition_scores),
-        np.std(transition_scores))
+    if transition_scores != []:
+        transition_scores = np.array(transition_scores)
+        string += ',%d,%.3f,%.3f,%.3f,%.3f' % (
+            len(transition_scores),
+            np.min(transition_scores),
+            np.max(transition_scores),
+            np.average(transition_scores),
+            np.std(transition_scores))
+    else:
+        string += ',0,NaN,NaN,NaN,NaN'
 
     return string
 
@@ -344,7 +359,8 @@ if __name__ == "__main__":
 
         print('----------- csv ---------')
         with open(args.output, 'wt') as f:
-            string = 'expname,exptype,time_elapsed,#warnings,#wait,#crashes,#targetmethod reg:cov,#invoc in main,#invoc in all'
+            string = 'expname,exptype,time_elapsed,#warnings,#wait,#crashes,#targetmethod reg:cov'
+            string += ',#strategy MH,# all,#invoc in main,#invoc in all'
             string += ',# gtransition marked,# gtransition total,# state marked,# state total,#subsequence (>=3),# subsequence total'
             string += ',state score:len,min,max,avg,std'
             string += ',transition score:len,min,max,avg,std'
@@ -369,7 +385,8 @@ if __name__ == "__main__":
 
         print('----------- csv ---------')
         with open(args.output, 'wt') as f:
-            string = 'expname,exptype,time_elapsed,#warnings,#wait,#crashes,#targetmethod reg:cov,#invoc in main,#invoc in all'
+            string = 'expname,exptype,time_elapsed,#warnings,#wait,#crashes,#targetmethod reg:cov'
+            string += ',#strategy MH,# all,#invoc in main,#invoc in all'
             f.write(string)
             f.write('\n')
             print(string)
