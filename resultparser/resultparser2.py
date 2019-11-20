@@ -2,6 +2,8 @@ import sys, os
 import csv
 import glob, re
 from androidkit import run_cmd
+import argparse
+import numpy as np
 
 
 class Counter:
@@ -33,6 +35,15 @@ class Counter:
     def total(self):
         return sum(self.content.values())
 
+    def keys(self):
+        return self.content.keys()
+
+    def values(self):
+        return self.content.values()
+
+    def __len__(self):
+        return self.content.__len__()
+
 class ExperimentUnit:
     def __init__(self, expname, exptype, directory):
         # init
@@ -53,7 +64,7 @@ strategies = [
     'BAD_STATE',
 ]
 
-def makeUnit(expname, exptype, directory):
+def makeUnit(expname, exptype, directory, detail=False):
     apelog_fname = os.path.join(directory, 'ape_stdout_stderr.txt')
     logcat_fname = os.path.join(directory, 'logcat.txt')
     mtdata_directories = glob.glob(os.path.join(directory, 'mt_data', '*'))
@@ -212,8 +223,6 @@ def makeUnit(expname, exptype, directory):
                     except KeyError:
                         execution_data[(clsname, mtdname, signature)] = ExecutionData(execdata)
 
-    warningCounter.pretty()
-    crashLongMessagesCounter.pretty()
 
     string = '{},{}'.format(expname, exptype)
     string += ',{},{},{},{},'.format(time_elapsed, warningCounter.total(), waitCounter.total(), crashLongMessagesCounter.total())
@@ -229,27 +238,141 @@ def makeUnit(expname, exptype, directory):
     string += '/'.join(method_data)
     string += ',{},{}'.format(mtdCounter.main_cnt, mtdCounter.cnt)
 
+    if not detail:
+        warningCounter.pretty()
+        crashLongMessagesCounter.pretty()
+        return string
+
+    # analysis for sataModel.obj
+    # GUITreeTransition marked/total
+    # State marked/total
+    # StateTransition marked/total
+    # unique subsequences (>=3 times / at least once)
+    # @TODO State score
+    # @TODO StateTransition score
+    data = []
+    import javaobj
+    from common import classReadJavaList
+    from tree import GUITree
+    from model import Model, Graph, StateTransition
+    with open(modelobject_fname, 'rb') as f:
+        model = Model(javaobj.loads(f.read()))
+    graph = Graph.init(model.graph)
+
+    treeHistory = graph.treeTransitionHistory
+    marked_gtransitions = []
+    marked_transitions = set()
+    for gtransition in treeHistory:
+        if gtransition.hasMetTargetMethod:
+            marked_gtransitions.append(gtransition)
+            marked_transitions.add(gtransition.stateTransition)
+
+    data.append(len(marked_gtransitions))
+    data.append(len(treeHistory))
+
+    targetGUITrees = classReadJavaList(graph.metTargetMethodGUITrees, GUITree)
+    targetStates = set(map(lambda t:t.getCurrentState(), targetGUITrees))
+    targetStateIds = set(map(lambda t:id(t.currentState), targetGUITrees))
+    assert len(targetStates) == len(targetStateIds), (len(targetStates), len(targetStateIds))
+
+    data.append(len(targetStates))
+    data.append(graph.size())
+
+    from parseobj import getSubsequences, TargetSubsequence
+    subsequences = getSubsequences(model, graph)
+    subseqCounter = Counter()
+    for seq in subsequences:
+        targetSubsequence = TargetSubsequence(seq[0])
+        for tr in seq[1:]:
+            if id(tr.source.currentState) in targetStateIds:
+                subseqCounter.append(targetSubsequence)
+                targetSubsequence = TargetSubsequence(tr)
+            else:
+                targetSubsequence.append(tr)
+        subseqCounter.append(targetSubsequence)
+
+    data.append(len([s for s in subseqCounter.values() if s >= 3]))
+    data.append(len(subseqCounter))
+
+    string += ',' + ','.join(map(str, data))
+
+    # statistics for state / transition
+    state_scores = []
+    for state in targetStates:
+        state_scores.append(graph.metTargetScore(state))
+    state_scores = np.array(state_scores)
+    string += ',%d,%.3f,%.3f,%.3f,%.3f' % (
+        len(state_scores),
+        np.min(state_scores),
+        np.max(state_scores),
+        np.average(state_scores),
+        np.std(state_scores))
+
+    transition_scores = []
+    for transition in marked_transitions:
+        transition_scores.append(StateTransition.init(transition).metTargetRatio())
+    transition_scores = np.array(transition_scores)
+    string += ',%d,%.3f,%.3f,%.3f,%.3f' % (
+        len(transition_scores),
+        np.min(transition_scores),
+        np.max(transition_scores),
+        np.average(transition_scores),
+        np.std(transition_scores))
+
     return string
 
-if __name__ == "__main__":
-    results = []
-    for exp in sys.argv[1:]:
-        while exp.endswith('/'):
-            exp = exp[:-1]
-        expname, exptype = exp.split('/')[-2:]
-        print('Experiment {}/{}'.format(expname, exptype))
-        result = makeUnit(expname, exptype, exp)
-        if result is not None:
-            results.append(result)
-        print()
 
-    print('----------- csv ---------')
-    with open('result.csv', 'wt') as f:
-        string = 'expname,exptype,time_elapsed,#warnings,#wait,#crashes,#targetmethod reg:cov,#invoc in main,#invoc in all'
-        f.write(string)
-        f.write('\n')
-        print(string)
-        for result in results:
-            f.write(result)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Result parser')
+    parser.add_argument('--detail', default=False, action='store_true')
+    parser.add_argument('directories', nargs='+')
+
+    args = parser.parse_args()
+
+    if args.detail:
+        results = []
+        for exp in args.directories:
+            while exp.endswith('/'):
+                exp = exp[:-1]
+            expname, exptype = exp.split('/')[-2:]
+            print('Experiment {}/{}'.format(expname, exptype))
+            result = makeUnit(expname, exptype, exp, True)
+            if result is not None:
+                results.append(result)
+            print()
+
+        print('----------- csv ---------')
+        with open('result.csv', 'wt') as f:
+            string = 'expname,exptype,time_elapsed,#warnings,#wait,#crashes,#targetmethod reg:cov,#invoc in main,#invoc in all'
+            string += ',# gtransition marked,# gtransition total,# state marked,# state total,#subsequence (>=3),# subsequence total'
+            string += ',state score:len,min,max,avg,std'
+            string += ',transition score:len,min,max,avg,std'
+            f.write(string)
             f.write('\n')
-            print(result)
+            print(string)
+            for result in results:
+                f.write(result)
+                f.write('\n')
+                print(result)
+    else:
+        results = []
+        for exp in args.directories:
+            while exp.endswith('/'):
+                exp = exp[:-1]
+            expname, exptype = exp.split('/')[-2:]
+            print('Experiment {}/{}'.format(expname, exptype))
+            result = makeUnit(expname, exptype, exp)
+            if result is not None:
+                results.append(result)
+            print()
+
+        print('----------- csv ---------')
+        with open('result.csv', 'wt') as f:
+            string = 'expname,exptype,time_elapsed,#warnings,#wait,#crashes,#targetmethod reg:cov,#invoc in main,#invoc in all'
+            f.write(string)
+            f.write('\n')
+            print(string)
+            for result in results:
+                f.write(result)
+                f.write('\n')
+                print(result)
