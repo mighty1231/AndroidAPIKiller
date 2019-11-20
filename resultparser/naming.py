@@ -207,7 +207,7 @@ class Name(JavaClass):
                 else:
                     self._tuple = ('Type', self.klass, self.resourceId)
             elif clsname == 'com.android.commands.monkey.ape.naming.CompoundNamer$CompoundName':
-                self._tuple = ('Compound', classReadJavaList(self.names, Name))
+                self._tuple = ('Compound', tuple(classReadJavaList(self.names, Name)))
             elif clsname == 'com.android.commands.monkey.ape.naming.IndexNamer$IndexName':
                 self._tuple = ('Index', self.index)
             elif clsname == 'com.android.commands.monkey.ape.naming.ParentNamer$ParentName':
@@ -218,7 +218,7 @@ class Name(JavaClass):
                 else:
                     self._tuple = ('Text', self.text, self.contentDesc)
             elif clsname == 'com.android.commands.monkey.ape.naming.AncestorNamer$AncestorName':
-                self._tuple = ('Ancestor', classReadJavaList(self.names, Name))
+                self._tuple = ('Ancestor', tuple(classReadJavaList(self.names, Name)))
             else:
                 raise NotImplementedError(clsname)
         return self._tuple

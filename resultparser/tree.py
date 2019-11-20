@@ -108,6 +108,13 @@ class GUITreeNode(JavaClass):
     def getXPathName(self):
         return namingModule.Name.init(self.xpathName)
 
+class GUITreeTransition(JavaClass):
+    def __init__(self, gtransition):
+        super(GUITreeTransition, self).__init__(gtransition, 'com.android.commands.monkey.ape.tree.GUITreeTransition')
+
+    def getStateTransition(self):
+        return model.StateTransition.init(self.stateTransition)
+
 
 def GUITreeBuilder_getStateKey(naming, tree):
     naming = namingModule.Naming.init(naming)

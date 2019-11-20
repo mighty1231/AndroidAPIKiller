@@ -65,56 +65,12 @@ Start s1 s2 ... targetState ~ si ~ targetState ~ sj end
 import sys
 import javaobj
 from common import readJavaList, JavaClass
-from tree import GUITree, GUITreeBuilder_getStateKey
-from model import StateKey, State
+from tree import GUITree, GUITreeBuilder_getStateKey, GUITreeTransition
+from model import StateKey, State, StateTransition, Model, Graph
 from naming import StateNamingManager
 
 graph = None
 model = None
-
-class Model(JavaClass):
-    def __init__(self, model):
-        super(Model, self).__init__(model, "com.android.commands.monkey.ape.model.Model")
-
-    def rebuild(self, tree):
-        '''
-        GUITreeBuilder treeBuilder = new GUITreeBuilder(namingManager, tree);
-        return treeBuilder.getGUITree();
-        '''
-        tree = GUITree.init(tree)
-        namingManager = StateNamingManager.init(self.namingManager)
-        activity = tree.getActivityName()
-        document = tree.getDocument()
-
-        # GUITreeBuilder.rebuildGUITree()
-        current = namingManager.getNaming(tree)
-        results = current.naming(tree, True)
-        tree.setCurrentNaming(current, results.getNames(), results.getNodes())
-        tree.setCurrentState(None)
-
-        return tree
-
-    def getState(self, tree):
-        naming = tree.getCurrentNaming()
-        stateKey = GUITreeBuilder_getStateKey(naming, tree)
-        state = Graph.init(self.graph).getOrCreateState(stateKey)
-        # tree.setCurrentState(state)
-        return state
-
-class Graph(JavaClass):
-    def __init__(self, grpah):
-        super(Graph, self).__init__(graph, "com.android.commands.monkey.ape.model.Graph")
-
-    def getOrCreateState(self, stateKey):
-        stateKey = StateKey.init(stateKey)
-        state = None
-        for key, value in self.keyToState.items():
-            if StateKey(key) == stateKey:
-                state = value
-        if state is None:
-            print('Warning: unknown state, newly create state')
-            return None
-        return State.init(state)
 
 def GUITreeToState(model, graph, tree):
     # Model.rebuild(GUITree tree)
@@ -432,9 +388,37 @@ def check1(model, graph):
     targetTransitions = getTargetTransitions(model, graph)
     s2i = graph.stateToInStateTransitions
     s2o = graph.stateToOutStateTransitions
-    print('#Target States {} #Target Transitions {}'.format(len(targets), len(targetTransitions)))
+
+
+    stateTransitionIds = []
+    score_pairs = [] # score, count
+    for guitreetransition in targetTransitions:
+        if id(GUITreeTransition.init(guitreetransition).stateTransition) in stateTransitionIds:
+            continue
+        else:
+            stateTransitionIds.append(id(guitreetransition.stateTransition))
+        stateTransition = StateTransition.init(guitreetransition.stateTransition)
+        ratio = stateTransition.metTargetRatio()
+        l = len(stateTransition.getGUITreeTransitions())
+        score_pairs.append((ratio, l))
+
+    print('#Target States {} #Target GUITreeTransitions {} #Target StateTransitions {}'.format(
+            len(targets), len(targetTransitions), len(score_pairs)))
     for target in targets:
-        print(' - state {} numIn {} numOut {}'.format(State.init(target), len(s2i[target]), len(s2o[target])))
+        try:
+            print(' - state {} numIn {} numOut {}'.format(State.init(target), len(s2i[target]), len(s2o[target])))
+        except KeyError:
+            print('Warning: Some Target States does not have in/out transitions')
+            inumber = 0
+            if target in s2i:
+                inumber = len(s2i[target])
+            onumber = 0
+            if target in s2o:
+                onumber = len(s2o[target])
+            print(' - state {} numIn {} numOut {}'.format(State.init(target), inumber, onumber))
+
+    for score, count in score_pairs:
+        print(' - transition score %.3f sz %d' % (score, count))
 
     # describe targetTransitions
     targetTransitions

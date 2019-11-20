@@ -325,6 +325,7 @@ def makeUnit(expname, exptype, directory, detail=False):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Result parser')
     parser.add_argument('--detail', default=False, action='store_true')
+    parser.add_argument('--output', default='result.csv')
     parser.add_argument('directories', nargs='+')
 
     args = parser.parse_args()
@@ -342,7 +343,7 @@ if __name__ == "__main__":
             print()
 
         print('----------- csv ---------')
-        with open('result.csv', 'wt') as f:
+        with open(args.output, 'wt') as f:
             string = 'expname,exptype,time_elapsed,#warnings,#wait,#crashes,#targetmethod reg:cov,#invoc in main,#invoc in all'
             string += ',# gtransition marked,# gtransition total,# state marked,# state total,#subsequence (>=3),# subsequence total'
             string += ',state score:len,min,max,avg,std'
@@ -367,7 +368,7 @@ if __name__ == "__main__":
             print()
 
         print('----------- csv ---------')
-        with open('result.csv', 'wt') as f:
+        with open(args.output, 'wt') as f:
             string = 'expname,exptype,time_elapsed,#warnings,#wait,#crashes,#targetmethod reg:cov,#invoc in main,#invoc in all'
             f.write(string)
             f.write('\n')
