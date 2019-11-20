@@ -205,7 +205,7 @@ def run_ape_with_mt(apk_path, avd_name, libart_path, ape_path, mtserver_path,
     with open(os.path.join(output_dir, 'ape_stdout_stderr.txt'), 'rt') as logf:
         for line in logf:
             line = line.rstrip()
-            if "[APE_MT] MET_TARGET" in line:
+            if "met target" in line:
                 return "success"
 
     return "notsearched"
