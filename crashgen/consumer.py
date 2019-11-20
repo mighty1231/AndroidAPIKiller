@@ -530,7 +530,7 @@ def print_target_data(prefix, idx = 0):
         13: lambda tid, func_id: print('TargetMethod #%d be entered on %s' % (func_id, get_thread_name(tid))),
         14: lambda tid, func_id: print('TargetMethod #%d be exited on %s' % (func_id, get_thread_name(tid))),
         15: lambda tid, func_id: print('TargetMethod #%d be unwinded on %s' % (func_id, get_thread_name(tid))),
-    })
+    }, verbose = False)
 
 
 def inspect_stack(prefix, idx = 0, stack_depth = -1, end_condition = None):
@@ -1069,6 +1069,9 @@ if __name__ == "__main__":
         help='Print for just target method called')
     target_parser.add_argument('prefix')
 
+    targetall_parser = subparsers.add_parser('targetall')
+    targetall_parser.add_argument('prefixes', nargs='+')
+
     stack_parser = subparsers.add_parser('stack',
         help='Print function stack for every method enter/exit')
     stack_parser.add_argument('prefix')
@@ -1116,6 +1119,10 @@ if __name__ == "__main__":
         inspect_stack(args.prefix, stack_depth = depth, end_condition = end_condition)
     elif args.func == 'target':
         print_target_data(args.prefix)
+    elif args.func == 'targetall':
+        for prefix in args.prefixes:
+            print(prefix)
+            print_target_data(prefix)
     elif args.func == 'stack2':
         mtdptrs = list(map(lambda s:int(s,16), args.mtdptrs.split(',')))
         inspect_stack2(args.prefix, mtdptrs)

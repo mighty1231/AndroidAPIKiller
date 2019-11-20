@@ -81,6 +81,6 @@ rec47	../../ReCDroid/EvaluationResult/apks/47.openhab-v2.0.10beta.apk
 org/openhab/habdroid/ui/OpenHABWidgetListFragment$3	onClick	(Landroid/view/View;)V
 
 1
-rec49	./../ReCDroid/EvaluationResult/apks/49.microMathematics-v2.15.4.apk
+rec49	../../ReCDroid/EvaluationResult/apks/49.microMathematics-v2.15.4.apk
 com/mkulesh/micromath/widgets/HorizontalNumberPicker	onClick	(Landroid/view/View;)V
 
