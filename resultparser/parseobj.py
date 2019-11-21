@@ -264,6 +264,9 @@ class TargetSubsequence:
         return all(id(self.transitions[i].stateTransition) == id(other.transitions[i].stateTransition) \
                 for i in range(len(self.transitions)))
 
+    def __len__(self):
+        return len(self.transitions)
+
     @property
     def score(self):
         if self._score is not None:

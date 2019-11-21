@@ -327,23 +327,35 @@ def makeUnit(expname, exptype, directory, detail=False):
     data.append(len(targetStates))
     data.append(graph.size())
 
+    # Split with marked State (old) -> Split with marked StateTransition
     from parseobj import getSubsequences, TargetSubsequence
     subsequences = getSubsequences(model, graph)
     subseqCounter = Counter()
     for seq in subsequences:
         targetSubsequence = TargetSubsequence(seq[0])
         for tr in seq[1:]:
-            if id(tr.source.currentState) in targetStateIds:
+            if tr.hasMetTargetMethod == True:
+            # if id(tr.source.currentState) in targetStateIds:
                 subseqCounter.append(targetSubsequence)
                 targetSubsequence = TargetSubsequence(tr)
             else:
                 targetSubsequence.append(tr)
-        subseqCounter.append(targetSubsequence)
+        # subseqCounter.append(targetSubsequence)
 
     data.append(len([s for s in subseqCounter.values() if s >= 3]))
     data.append(len(subseqCounter))
 
     string += ',' + ','.join(map(str, data))
+    if len(subseqCounter) == 0:
+        string += ',NaN,NaN,NaN,NaN,NaN,NaN'
+    else:
+        # #subseq with len <=1, <=2, <=3, <=4, <=5
+        keys = subseqCounter.keys()
+        cnts = []
+        for sz in [1, 2, 3, 4, 5]:
+            cnts.append(len([s for s in keys if len(s) <= sz]))
+        cnts = tuple(cnts)
+        string += ',%.2f,%d,%d,%d,%d,%d' % ((subseqCounter.total() / len(subseqCounter),) + cnts)
 
     # statistics for state / transition
     state_scores = []
@@ -403,7 +415,9 @@ if __name__ == "__main__":
             string = 'expname,exptype,time_elapsed,#warnings,#wait,#targetmethod reg:cov'
             string += ',#strategy MH,#strategy all,#invoc in main,#invoc in all'
             string += ',#related crashes,#crashes'
-            string += ',#gtransition marked,#gtransition total,#state marked,#state total,#subsequence (>=3),#subsequence total'
+            string += ',#gtransition marked,#gtransition total,#state marked,#state total'
+            string += ',#subsequence (>=3),#subsequence total,#subseq avg per unique'
+            string += ',#len<=1,2,3,4,5'
             string += ',state score:len,min,max,avg,std'
             string += ',transition score:len,min,max,avg,std'
             string += ',methods'
