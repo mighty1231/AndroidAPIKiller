@@ -209,13 +209,17 @@ def makeUnit(expname, exptype, directory, detail=False):
     execution_data = {}
     mtdCounter = MtdCounter()
     for mtdata_directory in mtdata_directories:
-        binary = os.path.join(mtdata_directory, 'data_0.bin')
-        threadf = os.path.join(mtdata_directory, 'info_t.log')
-        mtdCounter.setTid(Threads(threadf).get_main_tid())
-        parse_data(binary, {10: mtdCounter.inc, 11: mtdCounter.inc, 12: mtdCounter.inc,
+        binary_fname = os.path.join(mtdata_directory, 'data_0.bin')
+        thread_fname = os.path.join(mtdata_directory, 'info_t.log')
+        method_fname = os.path.join(mtdata_directory, 'info_m.log')
+
+        if any(not os.path.isfile(fname) for fname in [binary_fname, thread_fname, method_fname]):
+            continue
+        mtdCounter.setTid(Threads(thread_fname).get_main_tid())
+        parse_data(binary_fname, {10: mtdCounter.inc, 11: mtdCounter.inc, 12: mtdCounter.inc,
             13: mtdCounter.tidInc, 14: mtdCounter.tidInc, 15: mtdCounter.tidInc}, verbose=False)
 
-        methods = Methods(os.path.join(mtdata_directory, 'info_m.log'))
+        methods = Methods(method_fname)
         execf = os.path.join(mtdata_directory, 'exec.txt')
         with open(execf, 'rt') as f:
             for line in f:
