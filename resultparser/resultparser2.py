@@ -115,8 +115,8 @@ def makeUnit(expname, exptype, directory, detail=False):
             if line == "[APE] *** INFO *** We are still waiting for activity loading. Let's wait for another 100ms...":
                 waitCounter.append(line)
 
-            elif 'Long Message' in line:
-                crashLongMessagesCounter.append(line)
+            elif line.startswith("[APE] // Long Msg: "):
+                crashLongMessagesCounter.append(line[len("[APE] // Long Msg: "):])
 
     if time_elapsed == -1:
         print("Time elapsed not found")
@@ -157,8 +157,15 @@ def makeUnit(expname, exptype, directory, detail=False):
                     assert status == 'registered lazily', status
                     assert clsname[0] == 'L' and clsname[-1] == ';', clsname
                     registered_lazily_counter.append((clsname, mtdname, signature))
-    method_register_status = {method: "r{} lr{}/{}".format(registered_counter[method],
-            registered_lazily_counter[method], lazy_counter[method]) for method in targetMethods}
+    method_register_status = {}
+    for method in targetMethods:
+        if registered_counter[method] == 0:
+            data =  '{}/{}'.format(registered_lazily_counter[method], lazy_counter[method])
+        else:
+            assert registered_lazily_counter[method] == 0, registered_lazily_counter[method]
+            assert lazy_counter[method] == 0, lazy_counter[method]
+            data = '{}/{}'.format(registered_counter[method], registered_counter[method])
+        method_register_status[method] = data
 
     # self.exptype = exptype
     # self.expname = expname
