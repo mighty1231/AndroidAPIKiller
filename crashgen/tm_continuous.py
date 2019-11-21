@@ -72,7 +72,7 @@ def ape_task(avd_name, serial, package_name, output_dir, running_minutes, mt_is_
             run_adb_cmd("shell rm -rf {}".format(directory), serial=serial)
 
     print('ape_task(): Emulator[{}, {}] Running APE with package {}'.format(avd_name, serial, package_name))
-    args = '-p {} --running-minutes {} --mt --mtdtarget {} {}{}--ape sata'.format(package_name, running_minutes, mtdtarget_fname,
+    args = '-p {} --running-minutes {} --mt --mtdtarget {} {}{}--ape sata --subseqstdlim 2'.format(package_name, running_minutes, mtdtarget_fname,
         "--no-mtdguide " if no_guide else "",
         "--target-all-thread " if target_all_thread else "")
     with open(os.path.join(output_dir, 'ape_stdout_stderr.txt'), 'wt') as f:
@@ -211,7 +211,7 @@ def run_ape_with_mt(apk_path, avd_name, libart_path, ape_path, mtserver_path,
 
     return "notsearched"
 
-def run(apk_path, avd_name, total_count, methods, libart_path, ape_path, mtserver_path, running_minutes, target_all_thread, output_dir, force_clear):
+def run(apk_path, avd_name, total_count, methods, libart_path, ape_path, mtserver_path, running_minutes, target_all_thread, output_dir, force_clear, no_nt = False):
     expidx = 0
     notsearched_count = 0
     unregistered_count = 0
@@ -239,6 +239,9 @@ def run(apk_path, avd_name, total_count, methods, libart_path, ape_path, mtserve
         expidx += 1
         force_clear = False
         print("{} exp status {} on {}".format(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), status, outf), flush=True)
+
+    if no_nt:
+        return
 
     if notsearched_count == total_count:
         print("Failed to search target methods during {} experiments".format(total_count))
@@ -309,6 +312,7 @@ if __name__ == "__main__":
     parser.add_argument('--running_minutes', default='20')
     parser.add_argument('--output_dir', default='../results/continuous')
     parser.add_argument('--target_all_thread', default=False, action='store_true')
+    parser.add_argument('--no_nt', default=False, action='store_true')
     parser.add_argument('--names', default=None) # do experiment with given expnames
     args = parser.parse_args()
 
@@ -358,6 +362,6 @@ if __name__ == "__main__":
         run(expunit.apk_path, args.avd_name, repeat_count, expunit.methods,
                 args.libart_path, args.ape_path, args.mtserver_path,
                 args.running_minutes, args.target_all_thread,
-                output_dir, force_clear)
+                output_dir, force_clear, args.no_nt)
         done_experiments.append(expunit)
         force_clear = False
