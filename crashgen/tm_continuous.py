@@ -21,6 +21,7 @@ from multiprocessing.sharedctypes import Value
 from mt_run import kill_mtserver
 from logcat_catcher import generate_catcher_thread, kill_generated_logcat_processes
 from ape_mt_runner import install_art_ape_mt
+import datetime
 
 ART_APE_MT_READY_SS = "ART_APE_MT" # snapshot name
 TMP_LOCATION = "/data/local/tmp"
@@ -224,7 +225,7 @@ def run(apk_path, avd_name, total_count, methods, libart_path, ape_path, mtserve
         if status == "install":
             return
         elif status == "rerun":
-            print("exp status {} on {}".format(status, outf), flush=True)
+            print("{} exp status {} on {}".format(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), status, outf), flush=True)
             continue
         elif status == "unregistered":
             # try 2 times
@@ -237,7 +238,7 @@ def run(apk_path, avd_name, total_count, methods, libart_path, ape_path, mtserve
             assert status == "success", status
         expidx += 1
         force_clear = False
-        print("exp status {} on {}".format(status, outf), flush=True)
+        print("{} exp status {} on {}".format(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), status, outf), flush=True)
 
     if notsearched_count == total_count:
         print("Failed to search target methods during {} experiments".format(total_count))
@@ -252,11 +253,11 @@ def run(apk_path, avd_name, total_count, methods, libart_path, ape_path, mtserve
         status = run_ape_with_mt(apk_path, avd_name, libart_path, ape_path, mtserver_path,
                 outf, running_minutes, force_clear, methods, target_all_thread, no_guide=True)
         if status == "rerun":
-            print("exp status {} on {}".format(status, outf), flush=True)
+            print("{} exp status {} on {}".format(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), status, outf), flush=True)
             continue
         assert status in ["unregistered", "success"], status
         expidx += 1
-        print("exp status {} on {}".format(status, outf), flush=True)
+        print("{} exp status {} on {}".format(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), status, outf), flush=True)
 
 class ExperimentUnit:
     def __init__(self, name, apk_path, methods):
@@ -342,7 +343,7 @@ if __name__ == "__main__":
         if expunit is None:
             break
 
-        print("[Experiment - {}]".format(expunit.name))
+        print("[Experiment - {}] {}".format(expunit.name, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
         print(expunit.apk_path)
         for clsname, mtdname, signature in expunit.methods:
             print('\t'.join([clsname, mtdname, signature]))
