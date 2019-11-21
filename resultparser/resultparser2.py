@@ -251,9 +251,9 @@ def makeUnit(expname, exptype, directory, detail=False):
     string += ',{},{}'.format(strategy_cnt[strategies.index('MCMC')], sum(strategy_cnt))
     string += ',{},{}'.format(mtdCounter.main_cnt, mtdCounter.cnt)
 
+    warningCounter.pretty()
+    crashLongMessagesCounter.pretty()
     if not detail:
-        warningCounter.pretty()
-        crashLongMessagesCounter.pretty()
         return string
 
     # analysis for sataModel.obj
