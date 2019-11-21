@@ -22,7 +22,7 @@ class Counter:
             value = self.content[item]
             if maxcnt == -1:
                 maxcnt = len(str(value))
-            print('%{}d : {}'.format(maxcnt, item) % value)
+            print('%{}d'.format(maxcnt) % value + ': {}'.format(item))
 
     def __getitem__(self, item):
         if item in self.content:
@@ -231,6 +231,8 @@ def makeUnit(expname, exptype, directory, detail=False):
         with open(execf, 'rt') as f:
             for line in f:
                 line = line.rstrip()
+                if line.startswith('\0'):
+                    line = line[1:]
                 if line == '':
                     break
                 if not line.startswith('Timestamp'):
@@ -244,7 +246,7 @@ def makeUnit(expname, exptype, directory, detail=False):
 
 
     string = '{},{}'.format(expname, exptype)
-    string += ',{},{},{},{},'.format(time_elapsed, warningCounter.total(), waitCounter.total(), crashLongMessagesCounter.total())
+    string += ',{},{},{},'.format(time_elapsed, warningCounter.total(), waitCounter.total())
 
     assert all(method in targetMethods for method in execution_data)
     method_data = []
@@ -259,11 +261,13 @@ def makeUnit(expname, exptype, directory, detail=False):
     string += ',{},{}'.format(mtdCounter.main_cnt, mtdCounter.cnt)
 
     warningCounter.pretty()
-    crashLongMessagesCounter.pretty()
     if not detail:
+        string += ',{}'.format(crashLongMessagesCounter.total())
+        string += ',{}'.format('/'.join(map(lambda tup:'{} {} [{}]'.format(*tup), targetMethods)))
         return string
 
     # analysis for sataModel.obj
+    # crashes with targets
     # GUITreeTransition marked/total
     # State marked/total
     # StateTransition marked/total
@@ -272,12 +276,37 @@ def makeUnit(expname, exptype, directory, detail=False):
     # @TODO StateTransition score
     data = []
     import javaobj
-    from common import classReadJavaList
+    from common import classReadJavaList, readJavaList
     from tree import GUITree
     from model import Model, Graph, StateTransition
     with open(modelobject_fname, 'rb') as f:
         model = Model(javaobj.loads(f.read()))
     graph = Graph.init(model.graph)
+
+    # crashes
+    crashWithTargetMethodsCounter = Counter()
+    records = model.actionHistory
+    for record in readJavaList(records):
+        if not record.guiAction:
+            action = record.modelAction
+            constant = action.type.constant
+            if constant == 'PHANTOM_CRASH':
+                # check stackTrace
+                stackTrace = action.crash.stackTrace
+                append = False
+                for line in stackTrace.split('\n'):
+                    if append:
+                        break
+                    for (clsname, mtdname, signature) in targetMethods:
+                        if mtdname in line and clsname[1:-1].split('/')[-1] in line:
+                            append = True
+                            break
+                if append:
+                    crashWithTargetMethodsCounter.append(action.crash.stackTrace)
+
+    crashWithTargetMethodsCounter.pretty()
+    data.append(crashWithTargetMethodsCounter.total())
+    data.append(crashLongMessagesCounter.total())
 
     treeHistory = graph.treeTransitionHistory
     marked_gtransitions = []
@@ -344,6 +373,7 @@ def makeUnit(expname, exptype, directory, detail=False):
             np.std(transition_scores))
     else:
         string += ',0,NaN,NaN,NaN,NaN'
+    string += ',{}'.format('/'.join(map(lambda tup:'{} {} [{}]'.format(*tup), targetMethods)))
 
     return string
 
@@ -370,11 +400,13 @@ if __name__ == "__main__":
 
         print('----------- csv ---------')
         with open(args.output, 'wt') as f:
-            string = 'expname,exptype,time_elapsed,#warnings,#wait,#crashes,#targetmethod reg:cov'
-            string += ',#strategy MH,# all,#invoc in main,#invoc in all'
-            string += ',# gtransition marked,# gtransition total,# state marked,# state total,#subsequence (>=3),# subsequence total'
+            string = 'expname,exptype,time_elapsed,#warnings,#wait,#targetmethod reg:cov'
+            string += ',#strategy MH,#strategy all,#invoc in main,#invoc in all'
+            string += ',#related crashes,#crashes'
+            string += ',#gtransition marked,#gtransition total,#state marked,#state total,#subsequence (>=3),#subsequence total'
             string += ',state score:len,min,max,avg,std'
             string += ',transition score:len,min,max,avg,std'
+            string += ',methods'
             f.write(string)
             f.write('\n')
             print(string)
@@ -396,8 +428,10 @@ if __name__ == "__main__":
 
         print('----------- csv ---------')
         with open(args.output, 'wt') as f:
-            string = 'expname,exptype,time_elapsed,#warnings,#wait,#crashes,#targetmethod reg:cov'
-            string += ',#strategy MH,# all,#invoc in main,#invoc in all'
+            string = 'expname,exptype,time_elapsed,#warnings,#wait,#targetmethod reg:cov'
+            string += ',#strategy MH,#strategy all,#invoc in main,#invoc in all'
+            string += ',#crashes'
+            string += ',methods'
             f.write(string)
             f.write('\n')
             print(string)
