@@ -69,8 +69,8 @@ def makeUnit(expname, exptype, directory, detail=False):
     logcat_fname = os.path.join(directory, 'logcat.txt')
     mtdata_directories = glob.glob(os.path.join(directory, 'mt_data', '*'))
 
-    assert os.path.isfile(apelog_fname)
-    assert os.path.isfile(logcat_fname)
+    assert os.path.isfile(apelog_fname), apelog_fname
+    assert os.path.isfile(logcat_fname), logcat_fname
 
     modelobjects = glob.glob(os.path.join(directory, 'ape', 'sata-*', 'sataModel.obj'))
     if len(modelobjects) < 1:
@@ -279,8 +279,12 @@ def makeUnit(expname, exptype, directory, detail=False):
     from common import classReadJavaList, readJavaList
     from tree import GUITree
     from model import Model, Graph, StateTransition
-    with open(modelobject_fname, 'rb') as f:
-        model = Model(javaobj.loads(f.read()))
+    try:
+        with open(modelobject_fname, 'rb') as f:
+            model = Model(javaobj.loads(f.read()))
+    except Exception:
+        return string + ',javaobjError'
+
     graph = Graph.init(model.graph)
 
     # crashes
