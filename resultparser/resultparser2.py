@@ -210,7 +210,7 @@ def makeUnit(expname, exptype, directory, detail=False):
         def ratio(self):
             return self.string.count('1') / len(self.string)
 
-    sys.path.append('../crashgen')
+    sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../crashgen'))
     from consumer import parse_data, Threads, Methods
 
     execution_data = {}
