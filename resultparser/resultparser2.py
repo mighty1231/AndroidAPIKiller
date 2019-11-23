@@ -434,12 +434,39 @@ def makeUnit(expname, exptype, directory, detail=False):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Result parser')
     parser.add_argument('--detail', default=False, action='store_true')
+    parser.add_argument('--st', default=False, action='store_true')
     parser.add_argument('--output', default='result.csv')
     parser.add_argument('directories', nargs='+')
 
     args = parser.parse_args()
 
-    if args.detail:
+    if args.st:
+        # print state / statetransitions with met target
+        for directory in args.directories:
+            print('Experiment {}'.format(directory))
+            import javaobj
+            from common import classReadJavaList, readJavaList
+            from tree import GUITree
+            from model import Model, Graph, StateTransition
+            with open(glob.glob(os.path.join(directory, "ape", "sata-*", "sataModel.obj"))[0], 'rb') as f:
+                try:
+                    model = Model(javaobj.loads(f.read()))
+                except Exception as e:
+                    print(e)
+                    continue
+
+            graph = Graph.init(model.graph)
+            targetTransitions = set()
+            for gt in graph.treeTransitionHistory:
+                if gt.hasMetTargetMethod:
+                    st = StateTransition.init(gt.stateTransition)
+                    targetTransitions.add(st)
+
+            for st in sorted(list(targetTransitions), key=lambda t:repr(t)):
+                print(st)
+
+
+    elif args.detail:
         results = []
         for exp in args.directories:
             while exp.endswith('/'):
