@@ -28,7 +28,7 @@ app/librenews/io/librenews/views/SettingsActivityFragment	onSharedPreferenceChan
 
 1
 rec19 ../../ReCDroid/EvaluationResult/apks/19.Pix-Art_share_debug.apk
-de/pixart/messenger/ui/EditAccountActivity	shareBarcode	()V
+de/pixart/messenger/ui/EditAccountActivity	shareLink	(Z)V
 
 1
 rec20	../../ReCDroid/EvaluationResult/apks/20.Pix-Art_debug.apk
