@@ -92,6 +92,10 @@ def makeUnit(expname, exptype, directory, detail=False):
     crashLongMessagesCounter = Counter()
     time_elapsed = -1
     strategy_cnt = [0 for strategy in strategies]
+    first_timestamp = -1
+    strategy_changed_timestamp = -1
+    first_met_timestamp = -1
+    timestamp = -1
     with open(apelog_fname, 'rt') as f:
         it = iter(f)
         for line in it:
@@ -112,11 +116,24 @@ def makeUnit(expname, exptype, directory, detail=False):
                 assert total == total2 and mob == wifi, line
                 time_elapsed = int(total)
 
-            if line == "[APE] *** INFO *** We are still waiting for activity loading. Let's wait for another 100ms...":
+            elif line == "[APE] *** INFO *** We are still waiting for activity loading. Let's wait for another 100ms...":
                 waitCounter.append(line)
 
             elif line.startswith("[APE] // Long Msg: "):
                 crashLongMessagesCounter.append(line[len("[APE] // Long Msg: "):])
+
+            elif line == "[APE] *** INFO *** Half time/counter consumed":
+                strategy_changed_timestamp = timestamp
+
+            elif line.startswith("[MonkeyServer] idle fetch"):
+                gp = re.match(r'\[MonkeyServer\] idle fetch ([-]{0,1}[0-9]+)', line)
+                assert gp, line
+                timestamp = int(gp.group(1))
+                if first_timestamp == -1 and timestamp not in [0, -1]:
+                    first_timestamp = timestamp
+            elif line == '[APE_MT] Lastlast transition met target':
+                if first_met_timestamp == -1:
+                    first_met_timestamp = timestamp
 
     if time_elapsed == -1:
         print("Time elapsed not found")
@@ -127,7 +144,6 @@ def makeUnit(expname, exptype, directory, detail=False):
                 if i >= num_lines - 10:
                     print(' {}: {}'.format(i, line.rstrip()))
         return None
-
     targetMethods = []
     lazy_counter = Counter()
     registered_counter = Counter()
@@ -260,6 +276,17 @@ def makeUnit(expname, exptype, directory, detail=False):
     string += ',{},{}'.format(strategy_cnt[strategies.index('MCMC')], sum(strategy_cnt))
     string += ',{},{}'.format(mtdCounter.main_cnt, mtdCounter.cnt)
 
+    # strategy changed timestamp
+    if strategy_changed_timestamp == -1:
+        string += ',NaN'
+    else:
+        string += ',{}'.format(strategy_changed_timestamp - first_timestamp)
+    # first met transition timestmap
+    if first_met_timestamp == -1:
+        string += ',NaN'
+    else:
+        string += ',{}'.format(first_met_timestamp - first_timestamp)
+
     warningCounter.pretty()
     if not detail:
         string += ',{}'.format(crashLongMessagesCounter.total())
@@ -289,8 +316,12 @@ def makeUnit(expname, exptype, directory, detail=False):
 
     # crashes
     crashWithTargetMethodsCounter = Counter()
+    firstMoment = -1
+    firstMomentTargetMethods = -1
     records = model.actionHistory
     for record in readJavaList(records):
+        if firstMoment == -1:
+            firstMoment = record.clockTimestamp
         if not record.guiAction:
             action = record.modelAction
             constant = action.type.constant
@@ -307,8 +338,14 @@ def makeUnit(expname, exptype, directory, detail=False):
                             break
                 if append:
                     crashWithTargetMethodsCounter.append(action.crash.stackTrace)
+                    if firstMomentTargetMethods == -1:
+                        firstMomentTargetMethods = record.clockTimestamp
 
     crashWithTargetMethodsCounter.pretty()
+    if firstMomentTargetMethods == -1:
+        data.append('NaN')
+    else:
+        data.append(firstMomentTargetMethods - firstMoment)
     data.append(crashWithTargetMethodsCounter.total())
     data.append(crashLongMessagesCounter.total())
 
@@ -418,7 +455,8 @@ if __name__ == "__main__":
         with open(args.output, 'wt') as f:
             string = 'expname,exptype,time_elapsed,#warnings,#wait,#targetmethod reg:cov'
             string += ',#strategy MH,#strategy all,#invoc in main,#invoc in all'
-            string += ',#related crashes,#crashes'
+            string += ',ts strategy changed,ts first met'
+            string += ',firstTimeMetCrash,#related crashes,#crashes'
             string += ',#gtransition marked,#gtransition total,#state marked,#state total'
             string += ',#subsequence (>=3),#subsequence total,#subseq avg per unique'
             string += ',#len<=1,2,3,4,5'
@@ -448,6 +486,7 @@ if __name__ == "__main__":
         with open(args.output, 'wt') as f:
             string = 'expname,exptype,time_elapsed,#warnings,#wait,#targetmethod reg:cov'
             string += ',#strategy MH,#strategy all,#invoc in main,#invoc in all'
+            string += ',ts strategy changed,ts first met'
             string += ',#crashes'
             string += ',methods'
             f.write(string)
