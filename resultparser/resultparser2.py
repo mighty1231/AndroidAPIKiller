@@ -56,19 +56,30 @@ class ExperimentUnit:
         # necessary files
         pass
 
-strategies = [
+strategies = {'Sata': [
     'TRIVIAL_ACTIVITY',
     'SATURATED_STATE',
     'USE_BUFFER',
     'EARLY_STAGE',
-    'MCMC',
     'EPSILON_GREEDY',
     'RANDOM',
     'NULL',
     'BUFFER_LOSS',
     'FILL_BUFFER',
     'BAD_STATE',
-]
+], 'Target':[
+    'TRIVIAL_ACTIVITY',
+    'SATURATED_STATE',
+    'USE_BUFFER',
+    'EARLY_STAGE',
+    'TARGET',
+    'EPSILON_GREEDY',
+    'RANDOM',
+    'NULL',
+    'BUFFER_LOSS',
+    'FILL_BUFFER',
+    'BAD_STATE',
+]}
 
 def makeUnit(expname, exptype, directory, printSubsequence, detail):
     apelog_fname = os.path.join(directory, 'ape_stdout_stderr.txt')
@@ -78,7 +89,7 @@ def makeUnit(expname, exptype, directory, printSubsequence, detail):
     assert os.path.isfile(apelog_fname), apelog_fname
     assert os.path.isfile(logcat_fname), logcat_fname
 
-    modelobjects = glob.glob(os.path.join(directory, 'ape', 'sata-*', 'sataModel.obj'))
+    modelobjects = glob.glob(os.path.join(directory, 'ape', '*', 'sataModel.obj'))
     if len(modelobjects) < 1:
         print("There is no model object in {}".format(directory))
         with open(apelog_fname, 'rt') as f:
@@ -97,7 +108,7 @@ def makeUnit(expname, exptype, directory, printSubsequence, detail):
     waitCounter = Counter()
     crashLongMessagesCounter = Counter()
     time_elapsed = -1
-    strategy_cnt = [0 for strategy in strategies]
+    strategy_cnt = {}
     first_timestamp = -1
     strategy_changed_timestamp = -1
     first_met_timestamp = -1
@@ -109,10 +120,10 @@ def makeUnit(expname, exptype, directory, printSubsequence, detail):
             if line.startswith('[APE_MT_WARNING]'):
                 warningCounter.append(line)
 
-            gp = re.match(r'\[APE\] Sata Strategy: buffer size \(([0-9]+)\)', line)
+            gp = re.match(r'\[APE\] \([a-zA-Z]+\) Strategy: buffer size \(([0-9]+)\)', line)
             if gp:
-                nums = [re.match(r'\[APE\] *([0-9]+)  ' + strategy, next(it).rstrip()) for strategy in strategies]
-                strategy_cnt = list(map(lambda gp:int(gp.group(1)), nums))
+                nums = [re.match(r'\[APE\] *([0-9]+)  (.*)', next(it).rstrip()) for strategy in strategies[gp.group(1)]]
+                strategy_cnt = dict(map(lambda gp:(gp.group(2), int(gp.group(1))), nums))
                 continue
 
             elif line.startswith('## Network stats: elapsed time='):
@@ -279,7 +290,7 @@ def makeUnit(expname, exptype, directory, printSubsequence, detail):
             data = execution_data[method].ratio()
         method_data.append('%s:%.3f' % (method_register_status[method], data))
     string += '/'.join(method_data)
-    string += ',{},{}'.format(strategy_cnt[strategies.index('MCMC')], sum(strategy_cnt))
+    string += ',{},{}'.format(strategy_cnt['TARGET'], sum(strategy_cnt.values()))
     string += ',{},{}'.format(mtdCounter.main_cnt, mtdCounter.cnt)
 
     # strategy changed timestamp
@@ -466,7 +477,7 @@ if __name__ == "__main__":
             from common import classReadJavaList, readJavaList
             from tree import GUITree
             from model import Model, Graph, StateTransition
-            with open(glob.glob(os.path.join(directory, "ape", "sata-*", "sataModel.obj"))[0], 'rb') as f:
+            with open(glob.glob(os.path.join(directory, "ape", "*", "sataModel.obj"))[0], 'rb') as f:
                 try:
                     model = Model(javaobj.loads(f.read()))
                 except Exception as e:
