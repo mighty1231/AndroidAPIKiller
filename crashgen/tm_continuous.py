@@ -50,7 +50,7 @@ def mt_task(package_name, serial, logging_flag, mt_is_running):
     kill_mtserver(serial)
 
 
-def ape_task(avd_name, serial, package_name, output_dir, running_minutes, mt_is_running, mtdtarget_fname, target_all_thread, no_guide):
+def ape_task(avd_name, serial, package_name, output_dir, running_minutes, mt_is_running, mtdtarget_fname, target_all_thread, methodGuide):
     sleep_cnt = 0
     while mt_is_running.value == 0 and sleep_cnt < 30:
         time.sleep(1)
@@ -72,8 +72,8 @@ def ape_task(avd_name, serial, package_name, output_dir, running_minutes, mt_is_
             run_adb_cmd("shell rm -rf {}".format(directory), serial=serial)
 
     print('ape_task(): Emulator[{}, {}] Running APE with package {}'.format(avd_name, serial, package_name))
-    args = '-p {} --running-minutes {} --mt --mtdtarget {} {}{}--ape sata --countlim 2'.format(package_name, running_minutes, mtdtarget_fname,
-        "--no-mtdguide " if no_guide else "",
+    args = '-p {} --running-minutes {} --mt --mtdtarget {} --ape {} {}--countlim 2'.format(package_name, running_minutes, mtdtarget_fname,
+        "target" if methodGuide else "sata",
         "--target-all-thread " if target_all_thread else "")
     with open(os.path.join(output_dir, 'ape_stdout_stderr.txt'), 'wt') as f:
         ret = run_adb_cmd('shell CLASSPATH={} {} {} {} {}'.format(
@@ -94,7 +94,7 @@ def ape_task(avd_name, serial, package_name, output_dir, running_minutes, mt_is_
     ret = run_adb_cmd('pull /data/ape {}'.format(output_dir), serial=serial)
 
 def run_ape_with_mt(apk_path, avd_name, libart_path, ape_path, mtserver_path,
-        output_dir, running_minutes, force_clear, methods, target_all_thread, no_guide=False):
+        output_dir, running_minutes, force_clear, methods, target_all_thread, methodGuide=True):
     package_name = get_package_name(apk_path)
     print('run_ape_with_mt(): given apk_path {} avd_name {}'.format(apk_path, avd_name))
 
@@ -123,7 +123,7 @@ def run_ape_with_mt(apk_path, avd_name, libart_path, ape_path, mtserver_path,
         args=(package_name, avd.serial, "00010180", mt_is_running))
     apetask_thread = threading.Thread(target=ape_task,
         args=(avd_name, avd.serial, package_name, output_dir, running_minutes,
-              mt_is_running, mtdtarget_emulpath, target_all_thread, no_guide))
+              mt_is_running, mtdtarget_emulpath, target_all_thread, methodGuide))
 
     set_multiprocessing_mode()
     generate_catcher_thread(os.path.join(output_dir, "logcat.txt"),
@@ -199,7 +199,7 @@ def run_ape_with_mt(apk_path, avd_name, libart_path, ape_path, mtserver_path,
     print('run_ape_with_mt(): methods registered...')
     print(methods_registered_over_exp)
 
-    if no_guide:
+    if methodGuide:
         return "success"
 
     # 2. method is not called
@@ -221,7 +221,7 @@ def run(apk_path, avd_name, total_count, methods, libart_path, ape_path, mtserve
             print("Creating folder ", outf)
             os.makedirs(outf)
         status = run_ape_with_mt(apk_path, avd_name, libart_path, ape_path, mtserver_path,
-                outf, running_minutes, force_clear, methods, target_all_thread, no_guide=False)
+                outf, running_minutes, force_clear, methods, target_all_thread, methodGuide=True)
         if status == "install":
             return
         elif status == "rerun":
@@ -254,7 +254,7 @@ def run(apk_path, avd_name, total_count, methods, libart_path, ape_path, mtserve
             print("Creating folder ", outf)
             os.makedirs(outf)
         status = run_ape_with_mt(apk_path, avd_name, libart_path, ape_path, mtserver_path,
-                outf, running_minutes, force_clear, methods, target_all_thread, no_guide=True)
+                outf, running_minutes, force_clear, methods, target_all_thread, methodGuide=False)
         if status == "rerun":
             print("{} exp status {} on {}".format(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), status, outf), flush=True)
             continue
