@@ -7,8 +7,9 @@ import numpy as np
 
 
 class Counter:
-    def __init__(self):
+    def __init__(self, name = None):
         self.content = {}
+        self.name = name
 
     def append(self, item):
         try:
@@ -17,6 +18,11 @@ class Counter:
             self.content[item] = 1
 
     def pretty(self):
+        if not self.content:
+            return
+
+        if self.name is not None:
+            print("[Counter {}]".format(self.name))
         maxcnt = -1
         for item in sorted(self.content.keys(), key=lambda k:-self.content[k]):
             value = self.content[item]
@@ -64,7 +70,7 @@ strategies = [
     'BAD_STATE',
 ]
 
-def makeUnit(expname, exptype, directory, detail=False):
+def makeUnit(expname, exptype, directory, printSubsequence, detail):
     apelog_fname = os.path.join(directory, 'ape_stdout_stderr.txt')
     logcat_fname = os.path.join(directory, 'logcat.txt')
     mtdata_directories = glob.glob(os.path.join(directory, 'mt_data', '*'))
@@ -315,7 +321,8 @@ def makeUnit(expname, exptype, directory, detail=False):
     graph = Graph.init(model.graph)
 
     # crashes
-    crashWithTargetMethodsCounter = Counter()
+    crashWithTargetMethodsCounter = Counter("crashes with target")
+    crashWithoutTargetMethodsCounter = Counter("crashes without target")
     firstMoment = -1
     firstMomentTargetMethods = -1
     records = model.actionHistory
@@ -328,20 +335,23 @@ def makeUnit(expname, exptype, directory, detail=False):
             if constant == 'PHANTOM_CRASH':
                 # check stackTrace
                 stackTrace = action.crash.stackTrace
-                append = False
+                metTarget = False
                 for line in stackTrace.split('\n'):
-                    if append:
+                    if metTarget:
                         break
                     for (clsname, mtdname, signature) in targetMethods:
                         if mtdname in line and clsname[1:-1].split('/')[-1] in line:
-                            append = True
+                            metTarget = True
                             break
-                if append:
+                if metTarget:
                     crashWithTargetMethodsCounter.append(action.crash.stackTrace)
                     if firstMomentTargetMethods == -1:
                         firstMomentTargetMethods = record.clockTimestamp
+                else:
+                    crashWithoutTargetMethodsCounter.append(action.crash.longMsg)
 
     crashWithTargetMethodsCounter.pretty()
+    crashWithoutTargetMethodsCounter.pretty()
     if firstMomentTargetMethods == -1:
         data.append('NaN')
     else:
@@ -372,19 +382,26 @@ def makeUnit(expname, exptype, directory, detail=False):
     from parseobj import getSubsequences, TargetSubsequence
     subsequences = getSubsequences(model, graph)
     subseqCounter = Counter()
+    targetSubsequences = []
     for seq in subsequences:
-        targetSubsequence = TargetSubsequence(seq[0])
-        for tr in seq[1:]:
+        targetSubsequence = TargetSubsequence(seq[0], seq.getTimestampDelta(0))
+        for i in range(1, len(seq)):
+            tr = seq[i]
+            timestamp = seq.getTimestampDelta(i)
             if tr.hasMetTargetMethod == True:
             # if id(tr.source.currentState) in targetStateIds:
                 subseqCounter.append(targetSubsequence)
-                targetSubsequence = TargetSubsequence(tr)
+                targetSubsequences.append(targetSubsequence)
+                targetSubsequence = TargetSubsequence(tr, timestamp)
             else:
-                targetSubsequence.append(tr)
+                targetSubsequence.append(tr, timestamp)
         # subseqCounter.append(targetSubsequence)
 
     data.append(len([s for s in subseqCounter.values() if s >= 3]))
     data.append(len(subseqCounter))
+    if printSubsequence:
+        for subsequence in targetSubsequences:
+            print('{}: {}'.format(subsequence.timestamps[0], subsequence.seqdetail()))
 
     string += ',' + ','.join(map(str, data))
     if len(subseqCounter) == 0:
@@ -436,6 +453,7 @@ if __name__ == "__main__":
     parser.add_argument('--detail', default=False, action='store_true')
     parser.add_argument('--st', default=False, action='store_true')
     parser.add_argument('--output', default='result.csv')
+    parser.add_argument('--ssprint', default=False, action='store_true', help='print subsequences')
     parser.add_argument('directories', nargs='+')
 
     args = parser.parse_args()
@@ -473,7 +491,7 @@ if __name__ == "__main__":
                 exp = exp[:-1]
             expname, exptype = exp.split('/')[-2:]
             print('Experiment {}/{}'.format(expname, exptype))
-            result = makeUnit(expname, exptype, exp, True)
+            result = makeUnit(expname, exptype, exp, args.ssprint, True)
             if result is not None:
                 results.append(result)
             print()
@@ -504,7 +522,7 @@ if __name__ == "__main__":
                 exp = exp[:-1]
             expname, exptype = exp.split('/')[-2:]
             print('Experiment {}/{}'.format(expname, exptype))
-            result = makeUnit(expname, exptype, exp)
+            result = makeUnit(expname, exptype, exp, args.ssprint, False)
             if result is not None:
                 results.append(result)
             print()

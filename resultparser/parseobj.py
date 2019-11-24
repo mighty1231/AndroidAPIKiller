@@ -196,14 +196,16 @@ def reportCrash(crash):
 
 class Subsequence:
     idx = 0
-    def __init__(self, gt):
+    def __init__(self, gt, timestamp_delta):
         self.treeTransitions = [gt]
         self.actionRecordsAtEnd = []
         self.idx = Subsequence.idx
+        self.timestamp_deltas = [timestamp_delta]
         Subsequence.idx += 1
 
-    def append(self, gt):
+    def append(self, gt, timestamp_delta):
         self.treeTransitions.append(gt)
+        self.timestamp_deltas.append(timestamp_delta)
 
     def crashReport(self):
         if len(self.actionRecordsAtEnd) == 0:
@@ -235,18 +237,21 @@ class Subsequence:
     def __len__(self):
         return self.treeTransitions.__len__()
 
+    def getTimestampDelta(self, idx):
+        return self.timestamp_deltas[idx]
+
 class TargetSubsequence:
-    def __init__(self, tr = None):
-        self.transitions = []
-        if tr is not None:
-            self.transitions.append(tr)
+    def __init__(self, tr, timestamp):
+        self.transitions = [tr]
+        self.timestamps = [timestamp]
         self._hash = None
         self._score = None
         self._ssq = None
 
-    def append(self, tr):
+    def append(self, tr, timestamp):
         assert tr.get_class().name == "com.android.commands.monkey.ape.tree.GUITreeTransition"
         self.transitions.append(tr)
+        self.timestamps.append(timestamp)
 
     def __hash__(self):
         if self._hash is None:
@@ -308,6 +313,15 @@ class TargetSubsequence:
         self._ssq = ret
         return ret
 
+    def seqdetail(self):
+        ret = []
+        ret.append(State.init(self.transitions[0].stateTransition.source).getGraphId())
+        for gt in self.transitions:
+            st = gt.stateTransition
+            ret.append('[{}]'.format(StateTransition.init(st).getGraphId()))
+            ret.append(State.init(st.target).getGraphId())
+        return '-'.join(ret)
+
     def __repr__(self):
         # print states
         return '<SubSequence len={}, states={}>'.format(len(self.transitions),
@@ -331,10 +345,12 @@ def getSubsequences(model, graph):
                 sequences[-1].appendActionRecord(records[tmp_idx])
             tmp_idx += 1
         if curguitree is None or tmp_idx != ar_idx:
-            sequences.append(Subsequence(gt))
+            sequences.append(Subsequence(gt,
+                records[tmp_idx].clockTimestamp - records[0].clockTimestamp))
         else:
             assert id(curguitree) == id(gt.source), (tr_idx, ar_idx)
-            sequences[-1].append(gt)
+            sequences[-1].append(gt,
+                records[tmp_idx].clockTimestamp - records[0].clockTimestamp)
         curguitree = gt.target
         ar_idx = tmp_idx + 1
     return sequences
