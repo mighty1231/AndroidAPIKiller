@@ -120,7 +120,7 @@ def makeUnit(expname, exptype, directory, printSubsequence, detail):
             if line.startswith('[APE_MT_WARNING]'):
                 warningCounter.append(line)
 
-            gp = re.match(r'\[APE\] \([a-zA-Z]+\) Strategy: buffer size \(([0-9]+)\)', line)
+            gp = re.match(r'\[APE\] ([a-zA-Z]+) Strategy: buffer size \(([0-9]+)\)', line)
             if gp:
                 nums = [re.match(r'\[APE\] *([0-9]+)  (.*)', next(it).rstrip()) for strategy in strategies[gp.group(1)]]
                 strategy_cnt = dict(map(lambda gp:(gp.group(2), int(gp.group(1))), nums))
@@ -290,7 +290,7 @@ def makeUnit(expname, exptype, directory, printSubsequence, detail):
             data = execution_data[method].ratio()
         method_data.append('%s:%.3f' % (method_register_status[method], data))
     string += '/'.join(method_data)
-    string += ',{},{}'.format(strategy_cnt['TARGET'], sum(strategy_cnt.values()))
+    string += ',{},{}'.format(strategy_cnt.get('TARGET', 0), sum(strategy_cnt.values()))
     string += ',{},{}'.format(mtdCounter.main_cnt, mtdCounter.cnt)
 
     # strategy changed timestamp
