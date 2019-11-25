@@ -407,6 +407,7 @@ def makeUnit(expname, exptype, directory, printSubsequence, detail):
             else:
                 targetSubsequence.append(tr, timestamp)
         # subseqCounter.append(targetSubsequence)
+        targetSubsequences.append(targetSubsequence)
 
     data.append(len([s for s in subseqCounter.values() if s >= 3]))
     data.append(len(subseqCounter))
