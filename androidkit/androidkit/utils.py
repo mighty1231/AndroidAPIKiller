@@ -579,3 +579,9 @@ def install_package(apk_path, serial=None):
     else:
         # Success
         assert 'Success' in last_line
+
+def screen_capture(outf, serial=None):
+    fname = "/sdcard/screen_capture_fff342.png"
+    run_adb_cmd('shell screencap -p {}'.format(fname))
+    run_adb_cmd('pull {} {}'.format(fname, outf))
+    run_adb_cmd('shell rm {}'.format(fname))

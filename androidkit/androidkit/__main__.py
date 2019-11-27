@@ -12,7 +12,8 @@ from .utils import (
     list_snapshots,
     load_snapshot,
     save_snapshot,
-    run_adb_cmd
+    run_adb_cmd,
+    screen_capture
 )
 
 parser = argparse.ArgumentParser(description='Tools to manage android devices')
@@ -84,6 +85,11 @@ pull_parser.add_argument('prefix',
     help='Examples: /sdcard/mt_0_ or /data/data/some.app/mt_3_')
 pull_parser.add_argument('--destination', default='.')
 pull_parser.add_argument('--serial', default=None)
+
+cap_parser = subparsers.add_parser('capture',
+    help='capture screen to png file')
+cap_parser.add_argument('outf')
+cap_parser.add_argument('--serial', default=None)
 
 def parse_serial(serial):
     try:
@@ -183,5 +189,8 @@ elif args.func == 'pull':
                                    os.path.split(fname)[1]))
     else:
         print("No such file or directory")
+elif args.func == 'capture':
+    serial = parse_serial(args.serial)
+    screen_capture(args.outf, serial=serial)
 else:
     raise
