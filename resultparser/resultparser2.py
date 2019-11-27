@@ -151,6 +151,10 @@ def makeUnit(expname, exptype, directory, printSubsequence, detail):
             elif line == '[APE_MT] Lastlast transition met target':
                 if first_met_timestamp == -1:
                     first_met_timestamp = timestamp
+            elif 'MET TARGET' in line: # for old version
+                if first_met_timestamp == -1:
+                    first_met_timestamp = timestamp
+
 
     if time_elapsed == -1:
         print("Time elapsed not found")
@@ -290,7 +294,7 @@ def makeUnit(expname, exptype, directory, printSubsequence, detail):
             data = execution_data[method].ratio()
         method_data.append('%s:%.3f' % (method_register_status[method], data))
     string += '/'.join(method_data)
-    string += ',{},{}'.format(strategy_cnt.get('TARGET', 0), sum(strategy_cnt.values()))
+    string += ',{},{}'.format(strategy_cnt.get('TARGET', 0) + strategy_cnt.get('MCMC', 0), sum(strategy_cnt.values()))
     string += ',{},{}'.format(mtdCounter.main_cnt, mtdCounter.cnt)
 
     # strategy changed timestamp
