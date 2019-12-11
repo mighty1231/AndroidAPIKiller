@@ -199,7 +199,7 @@ def run_ape_with_mt(apk_path, avd_name, libart_path, ape_path, mtserver_path,
     print('run_ape_with_mt(): methods registered...')
     print(methods_registered_over_exp)
 
-    if methodGuide:
+    if not methodGuide:
         return "success"
 
     # 2. method is not called

@@ -84,3 +84,7 @@ org/openhab/habdroid/ui/OpenHABWidgetListFragment$3	onClick	(Landroid/view/View;
 rec49	../../ReCDroid/EvaluationResult/apks/49.microMathematics-v2.15.4.apk
 com/mkulesh/micromath/widgets/HorizontalNumberPicker	onClick	(Landroid/view/View;)V
 
+1
+rec23	../../ReCDroid/EvaluationResult/apks/23.News-Android_debug.apk
+de/luhmer/owncloudnewsreader/SettingsActivity	setupSimplePreferencesScreen	()V
+
