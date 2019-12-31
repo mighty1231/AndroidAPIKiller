@@ -244,6 +244,7 @@ class TargetSubsequence:
     def __init__(self, tr, timestamp):
         self.transitions = [tr]
         self.timestamps = [timestamp]
+        self.actionRecordsAtEnd = []
         self._hash = None
         self._score = None
         self._ssq = None
@@ -252,6 +253,9 @@ class TargetSubsequence:
         assert tr.get_class().name == "com.android.commands.monkey.ape.tree.GUITreeTransition"
         self.transitions.append(tr)
         self.timestamps.append(timestamp)
+
+    def setActionRecords(self, ars):
+        self.actionRecordsAtEnd = [a for a in ars]
 
     def __hash__(self):
         if self._hash is None:
@@ -313,14 +317,36 @@ class TargetSubsequence:
         self._ssq = ret
         return ret
 
+    def containsCrash(self):
+        for ar in self.actionRecordsAtEnd:
+            if ar.modelAction.type.constant == 'PHANTOM_CRASH':
+                return True
+        return False
+
+    def getCrash(self):
+        for ar in self.actionRecordsAtEnd:
+            if ar.modelAction.type.constant == 'PHANTOM_CRASH':
+                ret = dict()
+                for attr in ['shortMsg','longMsg','timeMillis','stackTrace']:
+                    ret[attr] = getattr(ar.modelAction.crash, attr)
+                return ret
+
+        return dict()
+
+    def containsTarget(self):
+        for tr in self.transitions:
+            if tr.hasMetTargetMethod:
+                return True
+        return False
+
     def seqdetail(self):
         ret = []
         ret.append(State.init(self.transitions[0].stateTransition.source).getGraphId())
         for gt in self.transitions:
             st = gt.stateTransition
-            ret.append('[{}]'.format(StateTransition.init(st).getGraphId()))
+            ret.append('[{}{}]'.format('*' if gt.hasMetTargetMethod else '', StateTransition.init(st).getGraphId()))
             ret.append(State.init(st.target).getGraphId())
-        return '-'.join(ret)
+        return '-'.join(ret)  + '+' + ' / '.join(map(lambda ar:'{}@{}'.format(ar.modelAction.type.constant, ar.agentTimestamp), self.actionRecordsAtEnd))
 
     def __repr__(self):
         # print states

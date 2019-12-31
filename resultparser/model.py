@@ -101,6 +101,19 @@ class StateTransition(JavaClass):
                 ModelAction.init(self.action).getGraphId(),
                 State.init(self.target).getGraphId())
 
+class ActionRecord(JavaClass):
+    '''
+        public final long clockTimestamp;
+        public final int agentTimestamp;
+        public final Action modelAction;
+        public final GUITreeAction guiAction;
+    '''
+    def __init__(self, actionrecord):
+        super(ActionRecord, self).__init__(actionrecord, 'com.andorid.commands.monkey.ape.model.Model$ActionRecord')
+
+    def getAgentTimestamp(self):
+        return self.agentTimestamp
+
 class ModelAction(JavaClass):
     def __init__(self, modelaction):
         super(ModelAction, self).__init__(modelaction, 'com.android.commands.monkey.ape.model.ModelAction')

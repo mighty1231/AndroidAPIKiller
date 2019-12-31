@@ -81,7 +81,7 @@ strategies = {'Sata': [
     'BAD_STATE',
 ]}
 
-def makeUnit(expname, exptype, directory, printSubsequence, detail):
+def makeUnit(expname, exptype, directory, printSubsequence, detail, allcrash):
     apelog_fname = os.path.join(directory, 'ape_stdout_stderr.txt')
     logcat_fname = os.path.join(directory, 'logcat.txt')
     mtdata_directories = glob.glob(os.path.join(directory, 'mt_data', '*'))
@@ -138,6 +138,16 @@ def makeUnit(expname, exptype, directory, printSubsequence, detail):
 
             elif line.startswith("[APE] // Long Msg: "):
                 crashLongMessagesCounter.append(line[len("[APE] // Long Msg: "):])
+
+                if allcrash:
+                    print(line)
+                    while line.startswith("[APE] //"):
+                        line = next(it).rstrip()
+                        print(line)
+                    assert line.startswith('[APE] *** INFO *** Appending crash [')
+                    current_timestamp = int(line.split('@')[1])
+                    print('*** Time elapsed {}'.format(current_timestamp - first_timestamp))
+                    print()
 
             elif line == "[APE] *** INFO *** Half time/counter consumed":
                 strategy_changed_timestamp = timestamp
@@ -411,13 +421,25 @@ def makeUnit(expname, exptype, directory, printSubsequence, detail):
             else:
                 targetSubsequence.append(tr, timestamp)
         # subseqCounter.append(targetSubsequence)
+        targetSubsequence.setActionRecords(seq.actionRecordsAtEnd)
         targetSubsequences.append(targetSubsequence)
 
     data.append(len([s for s in subseqCounter.values() if s >= 3]))
     data.append(len(subseqCounter))
     if printSubsequence:
+        currentRunningSubsequences = []
         for subsequence in targetSubsequences:
-            print('{}: {}'.format(subsequence.timestamps[0], subsequence.seqdetail()))
+            currentRunningSubsequences.append(subsequence)
+            # if subsequence.containsTarget():
+            crash = subsequence.getCrash()
+            if crash:
+                print('Subsequence newly emrged# {}'.format(subsequence.timestamps[0]))
+                print(crash['stackTrace'])
+                for subsequence in currentRunningSubsequences:
+                    print(subsequence.seqdetail())
+                print()
+                currentRunningSubsequences = []
+            # print('{}: {}'.format(subsequence.timestamps[0], subsequence.seqdetail()))
 
     string += ',' + ','.join(map(str, data))
     if len(subseqCounter) == 0:
@@ -470,6 +492,7 @@ if __name__ == "__main__":
     parser.add_argument('--st', default=False, action='store_true')
     parser.add_argument('--output', default='result.csv')
     parser.add_argument('--ssprint', default=False, action='store_true', help='print subsequences')
+    parser.add_argument('--allcrash', default=False, action='store_true', help='print all crashes')
     parser.add_argument('directories', nargs='+')
 
     args = parser.parse_args()
@@ -507,7 +530,7 @@ if __name__ == "__main__":
                 exp = exp[:-1]
             expname, exptype = exp.split('/')[-2:]
             print('Experiment {}/{}'.format(expname, exptype))
-            result = makeUnit(expname, exptype, exp, args.ssprint, True)
+            result = makeUnit(expname, exptype, exp, args.ssprint, True, args.allcrash)
             if result is not None:
                 results.append(result)
             print()
@@ -538,7 +561,7 @@ if __name__ == "__main__":
                 exp = exp[:-1]
             expname, exptype = exp.split('/')[-2:]
             print('Experiment {}/{}'.format(expname, exptype))
-            result = makeUnit(expname, exptype, exp, args.ssprint, False)
+            result = makeUnit(expname, exptype, exp, args.ssprint, False, args.allcrash)
             if result is not None:
                 results.append(result)
             print()
