@@ -16,7 +16,7 @@ def getConfig(target):
         with open(config_json_path, 'wt') as f:
             f.write("{\n")
             f.write("\t\"SDK_PATH\":\"/SOMETHING/Android/Sdk\",\n")
-            f.write("\t\"AAPT_PATH\":\"/SOMETHING/Android/Sdk/SOMETHING/aapt\"\n")
+            f.write("\t\"AAPT_PATH\":\"/SOMETHING/Android/Sdk/SOMETHING/aapt\",\n")
             f.write("\t\"ADB_PATH\":\"/SOMETHING/Android/Sdk/platform-tools/adb\"\n")
             f.write("}\n")
         print("Fill the configuration file {}".format(config_json_path))
