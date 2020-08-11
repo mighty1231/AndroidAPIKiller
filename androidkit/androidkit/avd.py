@@ -66,8 +66,8 @@ def _run_avdmanager_list_avd():
     avd_list = []
     try:
         lines = output.split('\n')
-        assert lines[0].startswith('Parsing '),                             \
-                "You should modify the logic in here, or"                   \
+        assert lines[0].startswith('Parsing ') or lines[0].startswith("Available"),  \
+                "You should modify the logic in here, or"                            \
                 "please report to developer to following output\n" + output
 
         i = 1

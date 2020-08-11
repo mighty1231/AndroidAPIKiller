@@ -17,7 +17,8 @@ def getConfig(target):
             f.write("{\n")
             f.write("\t\"SDK_PATH\":\"/SOMETHING/Android/Sdk\",\n")
             f.write("\t\"AAPT_PATH\":\"/SOMETHING/Android/Sdk/SOMETHING/aapt\",\n")
-            f.write("\t\"ADB_PATH\":\"/SOMETHING/Android/Sdk/platform-tools/adb\"\n")
+            f.write("\t\"ADB_PATH\":\"/SOMETHING/Android/Sdk/platform-tools/adb\",\n")
+            f.write("\t\"AVDMANAGER_PATH\":\"/SOMETHING/Android/Sdk/tools/bin/avdmanager\"\n")
             f.write("}\n")
         print("Fill the configuration file {}".format(config_json_path))
         exit(1)
@@ -43,7 +44,7 @@ def getConfig(target):
     if not 'ADB_PATH' in _config:
         _config['ADB_PATH'] = os.path.join(_config['SDK_PATH'], 'platform-tools/adb')
 
-    _config['EMMA_JAR_PATH'] = os.path.join(_config['SDK_PATH'], 'tools/lib/emma.jar')
-    _config['AVDMANAGER_PATH'] = os.path.join(_config['SDK_PATH'], 'tools/bin/avdmanager')
+    if not 'AVDMANAGER_PATH' in _config:
+        _config['AVDMANAGER_PATH'] = os.path.join(_config['SDK_PATH'], 'tools/bin/avdmanager')
 
     return _config[target]
